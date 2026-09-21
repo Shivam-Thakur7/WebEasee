@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "WebEase — The Web, Made Easier",
+  "version": "2.4.0",
+  "description": "AI-powered accessibility browser extension. Control websites and documents using natural voice commands.",
+  "action": {
+    "default_title": "WebEase"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tts",
+    "tabs",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/content.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

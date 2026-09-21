@@ -1,0 +1,21 @@
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases
+*.db
+*.sqlite3
+
+# Project specific
+backend/generated_docs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
