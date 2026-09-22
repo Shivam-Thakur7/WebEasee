@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PROCESS_COMMAND') {
     handleProcessCommand(message.text, message.pageContext || '')
       .then(result => sendResponse({ success: true, ...result }))
-      .catch(err  => sendResponse({ success: false, error: err.message }));
+      .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
@@ -29,7 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'EXECUTE_IN_TAB') {
     executeInActiveTab(message.tool, message.args)
       .then(result => sendResponse({ success: true, result }))
-      .catch(err  => sendResponse({ success: false, error: err.message }));
+      .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
@@ -67,10 +67,47 @@ async function handleProcessCommand(text, pageContext) {
   // Returns: { tool, args, response_text, status }
 }
 
+// ─── Tab Resolution Helper ────────────────────────────────────────────────
+async function getActiveTab() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs.length > 0 && tabs[0].id) return tabs[0];
+  } catch (_) { }
+
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tabs.length > 0 && tabs[0].id) return tabs[0];
+  } catch (_) { }
+
+  try {
+    const allActive = await chrome.tabs.query({ active: true, windowType: 'normal' });
+    if (allActive.length > 0 && allActive[0].id) return allActive[0];
+  } catch (_) { }
+
+  const fallback = await chrome.tabs.query({ active: true });
+  return fallback[0] || null;
+}
+
+function isRestrictedUrl(url) {
+  if (!url) return true;
+  return (
+    url.startsWith('chrome://') ||
+    url.startsWith('edge://') ||
+    url.startsWith('about:') ||
+    url.startsWith('chrome-extension://') ||
+    url.includes('chrome.google.com/webstore') ||
+    url.includes('chromewebstore.google.com')
+  );
+}
+
 // ─── Tab Execution ────────────────────────────────────────────────────────
 async function executeInActiveTab(tool, args) {
-  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
+  const tab = await getActiveTab();
   if (!tab?.id) throw new Error('No active tab found');
+
+  if (isRestrictedUrl(tab.url) && (tool === 'read_page' || tool === 'summarize_page' || tool === 'click' || tool === 'scroll' || tool === 'type_text' || tool === 'find_element')) {
+    throw new Error('Chrome does not allow extensions to access internal system pages (chrome://, settings, or web store). Please open a regular website.');
+  }
 
   // ── Direct navigation via Chrome Tabs API ──────────────────────────────
 
@@ -183,17 +220,17 @@ function buildSearchUrl(args) {
   if (!args?.query) return null;
   const q = encodeURIComponent(args.query);
   switch (args.site) {
-    case 'youtube':   return `https://www.youtube.com/results?search_query=${q}`;
+    case 'youtube': return `https://www.youtube.com/results?search_query=${q}`;
     case 'wikipedia': return `https://en.wikipedia.org/wiki/Special:Search?search=${q}`;
-    case 'bing':      return `https://www.bing.com/search?q=${q}`;
-    default:          return `https://www.google.com/search?q=${q}`;
+    case 'bing': return `https://www.bing.com/search?q=${q}`;
+    default: return `https://www.google.com/search?q=${q}`;
   }
 }
 
 // ─── Page Context (short snippet for LLM context) ─────────────────────────
 async function getPageContext() {
-  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
-  if (!tab?.id) return '';
+  const tab = await getActiveTab();
+  if (!tab?.id || isRestrictedUrl(tab.url)) return '';
 
   try {
     const results = await chrome.scripting.executeScript({
@@ -213,23 +250,48 @@ async function getPageContext() {
 
 // ─── Full Page Text (for read_page / summarize_page) ──────────────────────
 async function getFullPageText() {
-  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
+  const tab = await getActiveTab();
   if (!tab?.id) return '';
+  if (isRestrictedUrl(tab.url)) {
+    return 'WebEase cannot access internal browser pages (such as extensions or settings). Please open a regular website.';
+  }
 
+  // Strategy 1: Ask injected content script first
+  try {
+    const csRes = await sendToContentScript(tab.id, 'get_page_text', {});
+    const csText = csRes?.result?.text || csRes?.text || '';
+    if (csText && csText.trim().length > 30) {
+      return csText;
+    }
+  } catch (e) {
+    console.warn('sendToContentScript for get_page_text failed, trying executeScript:', e);
+  }
+
+  // Strategy 2: Direct execution script fallback
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const clone = document.body.cloneNode(true);
+        const root = document.querySelector('article, main, [role="main"], #content, #mw-content-text') || document.body;
+        const clone = root.cloneNode(true);
         clone.querySelectorAll(
           'script, style, noscript, nav, header, footer, aside, ' +
-          '[aria-hidden="true"], .advertisement, .ad, iframe, svg'
+          '.advertisement, .ad, #cookie-banner, .cookie, ' +
+          'iframe, svg, img, video, audio, [role="banner"], [role="navigation"]'
         ).forEach(n => n.remove());
-        return clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+
+        let text = clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+        if (!text && root !== document.body) {
+          const bodyClone = document.body.cloneNode(true);
+          bodyClone.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+          text = bodyClone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+        }
+        return text;
       },
     });
     return results?.[0]?.result || '';
-  } catch (_) {
+  } catch (err) {
+    console.warn('getFullPageText execution error:', err);
     return '';
   }
 }
@@ -250,48 +312,9 @@ chrome.commands?.onCommand?.addListener(async (command) => {
   if (command === 'toggle-mic') {
     const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
     if (tab?.id && chrome.sidePanel && chrome.sidePanel.open) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => { });
     }
     // Broadcast to Dashboard to toggle mic
-    chrome.runtime.sendMessage({ type: 'TOGGLE_MIC' }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'TOGGLE_MIC' }).catch(() => { });
   }
 });
-
-// ─── Offscreen Document for Wake Word ─────────────────────────────────────
-let creatingOffscreen;
-async function setupOffscreenDocument() {
-const path = 'offscreen.html';
-  
-  if (await chrome.offscreen.hasDocument()) return;
-  if (creatingOffscreen) {
-    await creatingOffscreen;
-  } else {
-    creatingOffscreen = chrome.offscreen.createDocument({
-      url: path,
-      reasons: ['USER_MEDIA'], // Required to use getUserMedia/SpeechRecognition
-      justification: 'Continuously listen for wake word "Hello Agent" without interrupting UI.'
-    });
-    await creatingOffscreen;
-    creatingOffscreen = null;
-  }
-}
-
-// Enable the wake word in offscreen doc
-chrome.runtime.onStartup.addListener(async () => {
-  await setupOffscreenDocument();
-  chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: true });
-});
-chrome.runtime.onInstalled.addListener(async () => {
-  await setupOffscreenDocument();
-  chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: true });
-});
-
-// Allow Dashboard to enable/disable it
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  if (message.type === 'TOGGLE_WAKE_WORD') {
-    await setupOffscreenDocument();
-    chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: message.enabled });
-  }
-});
-
-

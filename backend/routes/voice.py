@@ -45,10 +45,19 @@ async def process_voice(
 
     # Step 1: Speech → Text
     stt = await speech_service.transcribe_audio(audio_bytes)
-    if stt["status"] != "success" or not stt["text"]:
+    if stt.get("status") == "no_match" or not stt.get("text"):
+        return {
+            "status": "no_match",
+            "transcribed_text": "",
+            "tool": "clarify",
+            "args": {},
+            "response_text": "I didn't catch that. Please speak your command again."
+        }
+
+    if stt["status"] != "success":
         return JSONResponse(
-            status_code=422,
-            content={"status": "error", "detail": stt.get("detail", "Could not understand audio.")}
+            status_code=400,
+            content={"status": "error", "detail": stt.get("detail", "Speech transcription failed.")}
         )
 
     text = sanitize_text(stt["text"])

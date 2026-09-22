@@ -38,13 +38,15 @@ class TTSService:
 
     def _synthesize_sync(self, text: str, voice: str = None, speed: float = 1.0) -> dict:
         import azure.cognitiveservices.speech as speechsdk
+        import html
         try:
             cfg = self._get_config(voice)
             voice_name = voice or "en-US-JennyNeural"
+            escaped_text = html.escape(text)
 
             ssml = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
               <voice name='{voice_name}'>
-                <prosody rate='{speed}'>{text}</prosody>
+                <prosody rate='{speed}'>{escaped_text}</prosody>
               </voice>
             </speak>"""
 

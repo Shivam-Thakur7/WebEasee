@@ -328,16 +328,20 @@ function doFindElement({ description }) {
   return { done: true, description, tag: best.tagName, text: best.textContent?.trim()?.slice(0, 50) };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
 function extractPageText() {
-  // Clone body, strip non-content elements, return clean text
-  const clone = document.body.cloneNode(true);
+  const root = document.querySelector('article, main, [role="main"], #content, #mw-content-text') || document.body;
+  const clone = root.cloneNode(true);
   clone.querySelectorAll(
     'script, style, noscript, nav, header, footer, aside, ' +
-    '[aria-hidden="true"], .advertisement, .ad, #cookie-banner, .cookie, ' +
+    '.advertisement, .ad, #cookie-banner, .cookie, ' +
     'iframe, svg, img, video, audio, [role="banner"], [role="navigation"]'
   ).forEach(n => n.remove());
 
-  const text = clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+  let text = clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+  if (!text && root !== document.body) {
+    const bodyClone = document.body.cloneNode(true);
+    bodyClone.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+    text = bodyClone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+  }
   return text;
 }

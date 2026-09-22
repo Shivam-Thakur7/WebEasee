@@ -24,8 +24,8 @@ function parseWakeWordAndCommand(rawText) {
   if (!rawText) return { isWake: false, command: '' };
   // Strip punctuation, symbols, extra spaces
   const clean = rawText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  // Match wake phrases (handles misrecognitions like 'agency', 'asian', 'urgent')
-  const wakeRegex = /\b(?:hello|hey|hi|helo)\s+(?:agent|agents|agency|asian|urgent)\b\s*(.*)/i;
+  // Match wake phrases (handles misrecognitions like 'agency', 'asian', 'urgent', 'engine', 'legend')
+  const wakeRegex = /\b(?:hello|hey|hi|helo|halo|hallo|yellow|how|allow)\s+(?:agent|agents|agency|asian|urgent|engine|legend|ajent|edgent)\b\s*(.*)/i;
   const match = clean.match(wakeRegex);
   if (match) {
     return { isWake: true, command: match[1]?.trim() || '' };
@@ -304,30 +304,65 @@ export default function Dashboard({
       return;
     }
 
+    // Helper: robust text extraction from active tab
+    const extractTextFromActiveTab = async () => {
+      // Step A: Ask background script
+      const bgText = await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: 'GET_PAGE_TEXT' }, (resp) => {
+            if (chrome.runtime.lastError) return resolve('');
+            resolve(resp?.text || '');
+          });
+        } catch (_) {
+          resolve('');
+        }
+      });
+      if (bgText && bgText.trim().length > 25) return bgText;
+
+      // Step B: Direct extraction from Side Panel into currentWindow tab
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          const direct = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const root = document.querySelector('article, main, [role="main"], #content, #mw-content-text') || document.body;
+              const clone = root.cloneNode(true);
+              clone.querySelectorAll(
+                'script, style, noscript, nav, header, footer, aside, ' +
+                '.advertisement, .ad, #cookie-banner, .cookie, ' +
+                'iframe, svg, img, video, audio, [role="banner"], [role="navigation"]'
+              ).forEach(n => n.remove());
+              let text = clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+              if (!text && root !== document.body) {
+                const bodyClone = document.body.cloneNode(true);
+                bodyClone.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+                text = bodyClone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+              }
+              return text;
+            },
+          });
+          const text = direct?.[0]?.result || '';
+          if (text && text.trim().length > 25) return text;
+        }
+      } catch (e) {
+        console.warn('Side panel direct script injection fallback:', e);
+      }
+
+      return bgText || '';
+    };
+
     // ── read_page — extract text from tab, then Azure TTS ────────────────
     if (tool === 'read_page') {
       setStatusMessage('Extracting page text...');
-      chrome.runtime.sendMessage({ type: 'EXECUTE_IN_TAB', tool: 'read_page', args: {} },
-        async (resp) => {
-          if (chrome.runtime.lastError) {
-            setStatusMessage(`Error: ${chrome.runtime.lastError.message}`);
-            return;
-          }
-          if (!resp?.success) {
-            setStatusMessage(`Error: ${JSON.stringify(resp)}`);
-            return;
-          }
-          const text = resp?.result?.text || resp?.result?.result?.text || '';
-          if (!text) {
-            setStatusMessage('No readable text found on this page.');
-            return;
-          }
-          // Speak first ~800 words via Azure TTS
-          const snippet = text.split(/\s+/).slice(0, 800).join(' ');
-          setStatusMessage('Reading the page aloud...');
-          await playTTS(snippet);
-        }
-      );
+      const text = await extractTextFromActiveTab();
+      if (!text || text.trim().length < 10) {
+        setStatusMessage('No readable text found. Please refresh (F5) the active page.');
+        return;
+      }
+      const snippet = text.split(/\s+/).slice(0, 800).join(' ');
+      setStatusMessage('Reading the page aloud...');
+      await playTTS(snippet);
       return;
     }
 
@@ -360,17 +395,14 @@ export default function Dashboard({
       setIsProcessing(true);
       setStatusMessage('Extracting page content...');
 
-      // Step 1: Get full page text via background.js
-      chrome.runtime.sendMessage({ type: 'GET_PAGE_TEXT' }, async (resp) => {
-        const pageText = resp?.text || '';
+      const pageText = await extractTextFromActiveTab();
+      if (!pageText || pageText.trim().length < 10) {
+        setStatusMessage('No readable content found. Please refresh (F5) the active page.');
+        setIsProcessing(false);
+        return;
+      }
 
-        if (!pageText) {
-          setStatusMessage('No readable content found on this page.');
-          setIsProcessing(false);
-          return;
-        }
-
-        setStatusMessage('Summarizing with AI...');
+      setStatusMessage('Summarizing with AI...');
 
         try {
           // Step 2: Send to backend for LLM summary
@@ -411,7 +443,6 @@ export default function Dashboard({
         } finally {
           setIsProcessing(false);
         }
-      });
       return;
     }
 
@@ -460,6 +491,13 @@ export default function Dashboard({
       if (data.response_text) {
         await playTTS(data.response_text);
       }
+
+      if (data.tool === 'clarify' || (data.response_text && data.response_text.trim().endsWith('?'))) {
+        setStatusMessage("Listening for your reply...");
+        setTimeout(() => {
+          startRecording();
+        }, 350);
+      }
     } catch (err) {
       console.error("Text command failed:", err);
       setStatusMessage("Error executing command. Is backend running?");
@@ -498,7 +536,13 @@ export default function Dashboard({
       }
 
       const data = await res.json();
-      const transcribed = data.transcribed_text || "No speech recognized.";
+      if (data.status === 'no_match' || !data.transcribed_text) {
+        setStatusMessage(data.response_text || "I didn't catch that. Say 'Hello Agent' to try again.");
+        setLiveSpeech("");
+        return;
+      }
+
+      const transcribed = data.transcribed_text;
       setLiveSpeech(transcribed);
       setStatusMessage("Processed by Azure AI Foundry");
 
@@ -516,6 +560,13 @@ export default function Dashboard({
       if (data.response_text) {
         await playTTS(data.response_text);
       }
+
+      if (data.tool === 'clarify' || (data.response_text && data.response_text.trim().endsWith('?'))) {
+        setStatusMessage("Listening for your reply...");
+        setTimeout(() => {
+          startRecording();
+        }, 350);
+      }
     } catch (e) {
       setStatusMessage(e.message || "Error processing audio.");
     } finally {
@@ -523,18 +574,11 @@ export default function Dashboard({
       setIsProcessing(false);
       setIsListening(false);
       setWakeWordDetected(false);
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: wakeWordEnabledRef.current }).catch(() => {});
-      }
     }
   };
 
   const startRecording = async () => {
     try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: false }).catch(() => {});
-      }
-
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicError(false);
       const mediaRecorder = new MediaRecorder(stream);
@@ -553,6 +597,16 @@ export default function Dashboard({
         }
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
           audioContextRef.current.close().catch(() => {});
+        }
+
+        // If user never spoke at all, don't send pure silence to Azure
+        if (!hasSpokenRef.current || audioChunksRef.current.length === 0) {
+          console.log("No speech detected during recording, resetting to wake word.");
+          setStatusMessage("No speech heard. Say 'Hello Agent' or click mic to begin.");
+          setIsListening(false);
+          setIsProcessing(false);
+          stream.getTracks().forEach(track => track.stop());
+          return;
         }
 
         const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
@@ -617,7 +671,7 @@ export default function Dashboard({
         console.warn("VAD setup error:", vadErr);
       }
 
-      mediaRecorder.start();
+      mediaRecorder.start(100);
       setIsListening(true);
       setIsProcessing(false);
       setLiveSpeech("");
@@ -633,10 +687,6 @@ export default function Dashboard({
         setStatusMessage("Please click Allow in the new tab that just opened!");
       } else {
         setStatusMessage("Microphone access denied. Please grant permission.");
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: wakeWordEnabledRef.current }).catch(() => {});
       }
     }
   };
@@ -660,45 +710,172 @@ export default function Dashboard({
   const [heardSnippet, setHeardSnippet] = useState("");
   const wakeWordRestartTimeoutRef = useRef(null);
 
-  // ── Wake Word Message Listener (Offscreen Document) ─────────────────────────
+  // ── Rock-Solid Persistent Wake Word Engine ("Hello Agent") ────────────────
   useEffect(() => {
-    // Send a message to background to enable/disable offscreen wake word
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ type: 'TOGGLE_WAKE_WORD', enabled: wakeWordEnabled });
-    }
-  }, [wakeWordEnabled]);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-  useEffect(() => {
-    const handleMessage = (msg) => {
-      if (msg?.type === 'WAKE_WORD_DETECTED') {
-        if (!wakeWordEnabledRef.current || isListeningRef.current || isProcessingRef.current) return;
-        
-        // Cooldowns
-        if (Date.now() - lastCommandEndTimeRef.current < 2500) return;
-        if (Date.now() - lastWakeTriggerTimeRef.current < 4000) return;
+    let activeRecognizer = null;
+    let isMounted = true;
+    let isStarting = false;
+    let isRunning = false;
+    let lastHeardTime = Date.now();
 
-        lastWakeTriggerTimeRef.current = Date.now();
-        setWakeWordDetected(true);
-        playWakeChime();
+    const cleanupActiveRecognizer = () => {
+      if (activeRecognizer) {
+        try {
+          activeRecognizer.onresult = null;
+          activeRecognizer.onerror = null;
+          activeRecognizer.onend = null;
+          activeRecognizer.abort();
+        } catch (_) {}
+        activeRecognizer = null;
+      }
+      isRunning = false;
+      isStarting = false;
+    };
 
-        if (msg.command) {
-          setStatusMessage(`⚡ "Hello Agent" heard! Running "${msg.command}"...`);
-          setLiveSpeech(msg.command);
-          executeTextCommand(msg.command);
-        } else {
-          setStatusMessage("⚡ \"Hello Agent\" heard! Listening for your command...");
-          setTimeout(() => {
-            startRecording();
+    const startFreshRecognizer = () => {
+      if (!isMounted) return;
+      if (!wakeWordEnabledRef.current || isListeningRef.current || isProcessingRef.current) {
+        cleanupActiveRecognizer();
+        return;
+      }
+      if (isStarting || isRunning) return;
+
+      isStarting = true;
+      cleanupActiveRecognizer();
+
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          isStarting = false;
+          isRunning = true;
+          lastHeardTime = Date.now();
+        };
+
+        recognition.onresult = (event) => {
+          lastHeardTime = Date.now();
+          if (!wakeWordEnabledRef.current || isListeningRef.current || isProcessingRef.current) return;
+
+          let transcript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript.toLowerCase() + ' ';
+          }
+
+          const cleanTranscript = transcript.trim();
+          setHeardSnippet(cleanTranscript.slice(-35));
+
+          // Flexible wake word matching
+          const isWakeMatch = 
+            cleanTranscript.includes('hello agent') ||
+            cleanTranscript.includes('hey agent') ||
+            cleanTranscript.includes('hi agent') ||
+            cleanTranscript.includes('hello agents') ||
+            cleanTranscript.includes('hello asian') ||
+            cleanTranscript.includes('hello urgent') ||
+            cleanTranscript.includes('hello agant') ||
+            cleanTranscript.includes('halo agent') ||
+            cleanTranscript.includes('helo agent') ||
+            cleanTranscript.includes('allow agent') ||
+            cleanTranscript.includes('yellow agent') ||
+            /\b(hello|hey|hi|helo|halo|hallo|allow|yellow)\s*(agent|agents|agency|asian|urgent|engine|legend|ajent)\b/i.test(cleanTranscript);
+
+          if (isWakeMatch) {
+            console.log("[WakeWord] Triggered by:", cleanTranscript);
+            cleanupActiveRecognizer();
+
+            const now = Date.now();
+            if (now - lastWakeTriggerTimeRef.current < 2500) return;
+            lastWakeTriggerTimeRef.current = now;
+
+            setWakeWordDetected(true);
+            playWakeChime();
+
+            // Extract inline command if spoken (e.g. "hello agent open youtube")
+            const inlineMatch = cleanTranscript.match(/\b(?:hello|hey|hi|helo|halo|hallo|allow|yellow)\s+(?:agent|agents|agency|asian|urgent|engine|legend|ajent)\b\s*(.*)/i);
+            const inlineCmd = inlineMatch ? inlineMatch[1]?.trim() : '';
+
+            if (inlineCmd && inlineCmd.length > 2) {
+              setStatusMessage(`⚡ "Hello Agent" heard! Running "${inlineCmd}"...`);
+              setLiveSpeech(inlineCmd);
+              executeTextCommand(inlineCmd);
+            } else {
+              setStatusMessage("⚡ \"Hello Agent\" heard! Listening for your command...");
+              setTimeout(() => {
+                if (isMounted) startRecording();
+              }, 200);
+            }
+          }
+        };
+
+        recognition.onerror = (e) => {
+          isStarting = false;
+          isRunning = false;
+          if (e.error === 'not-allowed') {
+            console.warn("Microphone access not permitted for speech recognition.");
+            setMicError(true);
+          }
+        };
+
+        recognition.onend = () => {
+          isStarting = false;
+          isRunning = false;
+          // ALWAYS spawn a fresh instance with debounce
+          if (wakeWordRestartTimeoutRef.current) clearTimeout(wakeWordRestartTimeoutRef.current);
+          wakeWordRestartTimeoutRef.current = setTimeout(() => {
+            if (isMounted && wakeWordEnabledRef.current && !isListeningRef.current && !isProcessingRef.current) {
+              startFreshRecognizer();
+            }
           }, 250);
-        }
+        };
+
+        activeRecognizer = recognition;
+        wakeWordRecognizerRef.current = recognition;
+        recognition.start();
+      } catch (err) {
+        isStarting = false;
+        isRunning = false;
+        console.warn("Wake word startup error:", err);
+        if (wakeWordRestartTimeoutRef.current) clearTimeout(wakeWordRestartTimeoutRef.current);
+        wakeWordRestartTimeoutRef.current = setTimeout(() => {
+          if (isMounted && wakeWordEnabledRef.current && !isListeningRef.current && !isProcessingRef.current) {
+            startFreshRecognizer();
+          }
+        }, 800);
       }
     };
 
-    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      chrome.runtime.onMessage.addListener(handleMessage);
-      return () => chrome.runtime.onMessage.removeListener(handleMessage);
-    }
-  }, []);
+    // Initial start
+    startFreshRecognizer();
+
+    // ── Self-Healing Heartbeat Watchdog ──
+    // Checks every 3.5s: if recognition silently stopped or crashed, resurrects it immediately!
+    const watchdogInterval = setInterval(() => {
+      if (!isMounted) return;
+      if (wakeWordEnabledRef.current && !isListeningRef.current && !isProcessingRef.current) {
+        if (!isRunning && !isStarting) {
+          console.log("[WakeWord Watchdog] Reviving inactive recognizer...");
+          startFreshRecognizer();
+        } else if (isRunning && (Date.now() - lastHeardTime > 25000)) {
+          // Recycle long-running session to prevent Chrome silent cloud drop
+          cleanupActiveRecognizer();
+          startFreshRecognizer();
+        }
+      }
+    }, 3500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(watchdogInterval);
+      if (wakeWordRestartTimeoutRef.current) clearTimeout(wakeWordRestartTimeoutRef.current);
+      cleanupActiveRecognizer();
+    };
+  }, [wakeWordEnabled, isListening, isProcessing]);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -747,13 +924,28 @@ export default function Dashboard({
             {statusMessage}
           </p>
           
-          {micError && typeof chrome !== 'undefined' && chrome.runtime && (
-            <button 
-              onClick={() => window.open(chrome.runtime.getURL('index.html'), '_blank')}
-              style={{ marginTop: '10px', fontSize: '12px', padding: '6px 12px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
-            >
-              Grant Mic Access in New Tab
-            </button>
+          {wakeWordEnabled && !isListening && !isProcessing && !micError && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(16, 185, 129, 0.12)', color: '#059669', padding: '3px 9px', borderRadius: '12px', fontSize: '10.5px', fontWeight: 700, marginTop: '5px' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+              Listening for "Hello Agent"
+            </div>
+          )}
+
+          {micError && (
+            <div style={{ marginTop: '8px' }}>
+              <button 
+                onClick={() => {
+                  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime) {
+                    chrome.tabs.create({ url: chrome.runtime.getURL('index.html') });
+                  } else {
+                    navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+                  }
+                }}
+                style={{ fontSize: '11.5px', padding: '6px 12px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                ⚠️ Microphone blocked — Click to allow in new tab
+              </button>
+            </div>
           )}
         </div>
 
