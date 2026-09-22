@@ -17,8 +17,6 @@ const BACKEND_URL = 'http://127.0.0.1:8000';
 export default function Settings({ 
   largeText, 
   setLargeText, 
-  highContrast, 
-  setHighContrast, 
   theme, 
   setTheme 
 }) {
@@ -137,18 +135,7 @@ export default function Settings({
             </button>
           </div>
           
-          {/* High Contrast AAA */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-card-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>High Contrast Mode (AAA)</span>
-            <button 
-              role="switch" 
-              aria-checked={highContrast} 
-              onClick={() => setHighContrast(!highContrast)}
-              style={{ width: '36px', height: '20px', background: highContrast ? 'var(--brand-600)' : 'var(--slate-300)', borderRadius: '9999px', border: 'none', position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}
-            >
-              <span style={{ display: 'block', width: '16px', height: '16px', background: 'white', borderRadius: '50%', transform: highContrast ? 'translateX(18px)' : 'translateX(2px)', transition: 'transform 0.2s' }}></span>
-            </button>
-          </div>
+
         </div>
       </div>
 

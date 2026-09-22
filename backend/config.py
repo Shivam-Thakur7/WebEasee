@@ -44,6 +44,7 @@ ALLOWED_BROWSER_TOOLS: list[str] = [
     "find_element",
     "play_video",
     "summarize_page",
+    "extension_action",
 ]
 
 def validate_config() -> list[str]:

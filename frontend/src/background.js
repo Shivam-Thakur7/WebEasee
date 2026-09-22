@@ -69,7 +69,7 @@ async function handleProcessCommand(text, pageContext) {
 
 // ─── Tab Execution ────────────────────────────────────────────────────────
 async function executeInActiveTab(tool, args) {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
   if (!tab?.id) throw new Error('No active tab found');
 
   // ── Direct navigation via Chrome Tabs API ──────────────────────────────
@@ -192,7 +192,7 @@ function buildSearchUrl(args) {
 
 // ─── Page Context (short snippet for LLM context) ─────────────────────────
 async function getPageContext() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
   if (!tab?.id) return '';
 
   try {
@@ -213,7 +213,7 @@ async function getPageContext() {
 
 // ─── Full Page Text (for read_page / summarize_page) ──────────────────────
 async function getFullPageText() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
   if (!tab?.id) return '';
 
   try {
@@ -225,7 +225,7 @@ async function getFullPageText() {
           'script, style, noscript, nav, header, footer, aside, ' +
           '[aria-hidden="true"], .advertisement, .ad, iframe, svg'
         ).forEach(n => n.remove());
-        return clone.innerText?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+        return clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
       },
     });
     return results?.[0]?.result || '';
@@ -244,3 +244,54 @@ chrome.runtime.onInstalled.addListener(() => {
       .catch((error) => console.error('Error setting panel behavior:', error));
   }
 });
+
+// ─── Global Keyboard Shortcuts ────────────────────────────────────────────
+chrome.commands?.onCommand?.addListener(async (command) => {
+  if (command === 'toggle-mic') {
+    const [tab] = await chrome.tabs.query({ active: true, windowType: 'normal' });
+    if (tab?.id && chrome.sidePanel && chrome.sidePanel.open) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+    // Broadcast to Dashboard to toggle mic
+    chrome.runtime.sendMessage({ type: 'TOGGLE_MIC' }).catch(() => {});
+  }
+});
+
+// ─── Offscreen Document for Wake Word ─────────────────────────────────────
+let creatingOffscreen;
+async function setupOffscreenDocument() {
+const path = 'offscreen.html';
+  
+  if (await chrome.offscreen.hasDocument()) return;
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+  } else {
+    creatingOffscreen = chrome.offscreen.createDocument({
+      url: path,
+      reasons: ['USER_MEDIA'], // Required to use getUserMedia/SpeechRecognition
+      justification: 'Continuously listen for wake word "Hello Agent" without interrupting UI.'
+    });
+    await creatingOffscreen;
+    creatingOffscreen = null;
+  }
+}
+
+// Enable the wake word in offscreen doc
+chrome.runtime.onStartup.addListener(async () => {
+  await setupOffscreenDocument();
+  chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: true });
+});
+chrome.runtime.onInstalled.addListener(async () => {
+  await setupOffscreenDocument();
+  chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: true });
+});
+
+// Allow Dashboard to enable/disable it
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.type === 'TOGGLE_WAKE_WORD') {
+    await setupOffscreenDocument();
+    chrome.runtime.sendMessage({ type: 'SET_WAKE_WORD_STATE', enabled: message.enabled });
+  }
+});
+
+

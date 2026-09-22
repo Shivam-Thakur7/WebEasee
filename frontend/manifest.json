@@ -20,13 +20,22 @@
       "run_at": "document_idle"
     }
   ],
+  "commands": {
+    "toggle-mic": {
+      "suggested_key": {
+        "default": "Alt+V"
+      },
+      "description": "Toggle Voice Control in WebEase"
+    }
+  },
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "tts",
     "tabs",
-    "sidePanel"
+    "sidePanel",
+    "offscreen"
   ],
   "host_permissions": [
     "http://127.0.0.1:8000/*",

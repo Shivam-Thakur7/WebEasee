@@ -216,6 +216,33 @@ BROWSER_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "extension_action",
+            "description": (
+                "Control the WebEase extension's UI and accessibility settings natively. "
+                "Use this when the user says 'toggle dark mode', 'open settings', "
+                "'go to documents', 'turn on high contrast', etc."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["toggle_theme", "toggle_large_text", "toggle_high_contrast", "navigate"],
+                        "description": "The action to perform."
+                    },
+                    "tab": {
+                        "type": "string",
+                        "enum": ["dashboard", "documents", "history", "settings", "profile"],
+                        "description": "Which tab to navigate to (only used if action is 'navigate')."
+                    }
+                },
+                "required": ["action"]
+            }
+        }
+    }
 ]
 
 # Quick lookup by name

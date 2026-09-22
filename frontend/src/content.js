@@ -338,6 +338,6 @@ function extractPageText() {
     'iframe, svg, img, video, audio, [role="banner"], [role="navigation"]'
   ).forEach(n => n.remove());
 
-  const text = clone.innerText?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
+  const text = clone.textContent?.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() || '';
   return text;
 }

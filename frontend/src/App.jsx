@@ -9,19 +9,18 @@ import {
   FileText, 
   History as HistoryIcon, 
   Settings as SettingsIcon,
-  Wifi,
-  WifiOff
+  User as UserIcon
 } from 'lucide-react';
 
 import Dashboard from './components/views/Dashboard';
 import Documents from './components/views/Documents';
 import History from './components/views/History';
 import Settings from './components/views/Settings';
+import Profile from './components/views/Profile';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [largeText, setLargeText] = useState(false);
-  const [highContrast, setHighContrast] = useState(false);
   const [theme, setTheme] = useState('light');
   const [backendHealthy, setBackendHealthy] = useState(true);
   const [docInitialPrompt, setDocInitialPrompt] = useState('');
@@ -31,12 +30,6 @@ export default function App() {
     if (largeText) document.documentElement.classList.add('large-text');
     else document.documentElement.classList.remove('large-text');
   }, [largeText]);
-
-  // Apply High Contrast
-  useEffect(() => {
-    if (highContrast) document.documentElement.classList.add('high-contrast');
-    else document.documentElement.classList.remove('high-contrast');
-  }, [highContrast]);
 
   // Apply Theme
   useEffect(() => {
@@ -79,6 +72,7 @@ export default function App() {
       if (e.altKey && e.key === '2') setCurrentView('documents');
       if (e.altKey && e.key === '3') setCurrentView('history');
       if (e.altKey && e.key === '4') setCurrentView('settings');
+      if (e.altKey && e.key === '5') setCurrentView('profile');
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -134,16 +128,7 @@ export default function App() {
               {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
             </button>
 
-            {/* High Contrast */}
-            <button 
-              id="toggle-contrast" 
-              className="tool-btn" 
-              aria-label="Toggle High Contrast Mode" 
-              title="High Contrast"
-              onClick={() => setHighContrast(!highContrast)}
-            >
-              <Contrast size={15} />
-            </button>
+
 
             {/* Large Text */}
             <button 
@@ -159,48 +144,58 @@ export default function App() {
         </header>
 
         {/* Tab Navigation */}
-        <nav aria-label="Navigation">
+        <nav aria-label="Navigation" style={{ display: 'flex', justifyContent: 'space-around' }}>
           <button 
             onClick={() => setCurrentView('dashboard')} 
             className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+            title="Dashboard (Alt+1)"
           >
             <LayoutDashboard size={16} />
-            <span>Dashboard</span>
           </button>
 
           <button 
             onClick={() => setCurrentView('documents')} 
             className={`nav-item ${currentView === 'documents' ? 'active' : ''}`}
+            title="Docs (Alt+2)"
           >
             <FileText size={16} />
-            <span>Docs</span>
           </button>
 
           <button 
             onClick={() => setCurrentView('history')} 
             className={`nav-item ${currentView === 'history' ? 'active' : ''}`}
+            title="History (Alt+3)"
           >
             <HistoryIcon size={16} />
-            <span>History</span>
+          </button>
+
+          <button 
+            onClick={() => setCurrentView('profile')} 
+            className={`nav-item ${currentView === 'profile' ? 'active' : ''}`}
+            title="Profile (Alt+5)"
+          >
+            <UserIcon size={16} />
           </button>
 
           <button 
             onClick={() => setCurrentView('settings')} 
             className={`nav-item ${currentView === 'settings' ? 'active' : ''}`}
+            title="Settings (Alt+4)"
           >
             <SettingsIcon size={16} />
-            <span>Settings</span>
           </button>
         </nav>
 
         {/* Main Body Content */}
-        <div className="views-body">
-          {currentView === 'dashboard' && (
+        <div className="views-body" style={{ position: 'relative' }}>
+          <div style={{ display: currentView === 'dashboard' ? 'block' : 'none', height: '100%' }}>
             <Dashboard 
               onNavigate={setCurrentView} 
               onCreateDoc={handleCreateDoc}
+              onToggleTheme={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+              onToggleLargeText={() => setLargeText(prev => !prev)}
             />
-          )}
+          </div>
           {currentView === 'documents' && (
             <Documents 
               initialPrompt={docInitialPrompt} 
@@ -215,12 +210,13 @@ export default function App() {
               }, 100);
             }} />
           )}
+          {currentView === 'profile' && (
+            <Profile />
+          )}
           {currentView === 'settings' && (
             <Settings 
               largeText={largeText} 
               setLargeText={setLargeText} 
-              highContrast={highContrast} 
-              setHighContrast={setHighContrast} 
               theme={theme}
               setTheme={setTheme}
             />

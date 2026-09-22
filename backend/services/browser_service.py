@@ -43,6 +43,7 @@ class BrowserService:
             "read_selected_text": lambda a: (True, a),
             "find_element":       self._validate_find_element,
             "play_video":         self._validate_play_video,
+            "extension_action":   lambda a: (True, a),
         }
 
         ok, processed_args = validators[tool](args)

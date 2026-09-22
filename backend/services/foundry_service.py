@@ -64,6 +64,11 @@ When the user speaks a command, choose the MOST APPROPRIATE tool from the list b
 - "create a document about X", "write a document on Y" → `generate_document`
 - "summarise the document" (referring to a WebEase doc, not a webpage) → `summarize_document`
 
+### Extension UI Controls
+- "toggle dark mode", "switch to dark theme", "change theme" → `extension_action` with action="toggle_theme"
+- "turn on large text", "make text bigger" → `extension_action` with action="toggle_large_text"
+- "open settings", "go to documents", "show history", "open profile" → `extension_action` with action="navigate" and tab="settings" (or documents, history, profile, dashboard)
+
 ### Greetings / no action
 - "hello agent", "hey", "hi" → reply with a brief, friendly confirmation only; do NOT call any tool.
 
@@ -236,6 +241,7 @@ class FoundryService:
             "summarize_page":     lambda a: "Summarizing the page for you.",
             "generate_document":  lambda a: f"Generating document: {a.get('title', '')}.",
             "summarize_document": lambda a: "Summarizing the document.",
+            "extension_action":   lambda a: f"Executing {a.get('action', 'extension command').replace('_', ' ')}.",
         }
         fn = responses.get(tool)
         return fn(args) if fn else f"Executing {tool}."
