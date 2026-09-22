@@ -121,6 +121,22 @@ export default function Documents({ initialPrompt = '' }) {
     setIsPlaying(false);
   };
 
+  // Automatically stop audio playback when switching tabs or unmounting
+  useEffect(() => {
+    const stopAudio = () => {
+      handleStopTTS();
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+
+    window.addEventListener('webease-stop-all-audio', stopAudio);
+    return () => {
+      window.removeEventListener('webease-stop-all-audio', stopAudio);
+      stopAudio();
+    };
+  }, [audioObj]);
+
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;

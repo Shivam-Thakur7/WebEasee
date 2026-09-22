@@ -57,7 +57,9 @@ async def process_voice(
     cmd = await foundry_service.process_command(text, page_context=page_context)
 
     # Step 3: Validate browser command if applicable
-    if cmd["status"] == "success" and cmd["tool"] not in (None, "clarify", "generate_document", "summarize_document"):
+    if cmd["status"] == "success" and cmd["tool"] not in (
+        None, "clarify", "generate_document", "summarize_document", "summarize_page"
+    ):
         validation = browser_service.validate_and_prepare(cmd["tool"], cmd["args"])
         if not validation["valid"]:
             cmd["status"] = "error"

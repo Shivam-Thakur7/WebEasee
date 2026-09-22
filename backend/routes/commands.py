@@ -1,7 +1,7 @@
-﻿"""
+"""
 WebEase — Commands Routes
-POST /commands/text   → plain text command → LLM → structured command
-                        (use this when browser handles mic itself via Web Speech API)
+POST /commands/text      → plain text command → LLM → structured command
+POST /commands/summarize → page text → LLM → spoken summary
 """
 
 from fastapi import APIRouter
@@ -19,21 +19,27 @@ class TextCommandRequest(BaseModel):
     page_context: str = ""
 
 
+class SummarizeRequest(BaseModel):
+    page_text: str
+
+
 @router.post("/text")
 async def process_text_command(req: TextCommandRequest):
     """
-    Send a plain-text voice command directly (already transcribed by browser).
+    Send a plain-text voice command (already transcribed by browser).
     Returns the tool call + spoken response.
     """
     text = sanitize_text(req.text)
     if not text:
         return {"status": "error", "detail": "Empty command."}
 
-    # Foundry LLM
+    # Foundry LLM — decide what tool to call
     cmd = await foundry_service.process_command(text, page_context=req.page_context)
 
-    # Validate browser command
-    if cmd["status"] == "success" and cmd["tool"] not in (None, "clarify", "generate_document", "summarize_document"):
+    # Validate browser command args (skip document tools and clarify)
+    if cmd["status"] == "success" and cmd["tool"] not in (
+        None, "clarify", "generate_document", "summarize_document", "summarize_page"
+    ):
         validation = browser_service.validate_and_prepare(cmd["tool"], cmd["args"])
         if not validation["valid"]:
             cmd["status"] = "error"
@@ -55,4 +61,23 @@ async def process_text_command(req: TextCommandRequest):
         "args": cmd.get("args", {}),
         "response_text": cmd.get("response_text"),
         "status": cmd.get("status"),
+    }
+
+
+@router.post("/summarize")
+async def summarize_page(req: SummarizeRequest):
+    """
+    Accept raw page text extracted from the browser tab,
+    summarize it with the LLM, and return the spoken summary.
+    """
+    if not req.page_text or not req.page_text.strip():
+        return {
+            "summary": "The page appears to have no readable content.",
+            "status": "error",
+        }
+
+    summary = await foundry_service.summarize_page(req.page_text)
+    return {
+        "summary": summary,
+        "status": "success",
     }

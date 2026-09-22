@@ -4,7 +4,7 @@ import {
   Contrast, 
   Type, 
   Moon,
-  Sun,
+  Sun, 
   LayoutDashboard, 
   FileText, 
   History as HistoryIcon, 
@@ -42,6 +42,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Stop any playing audio / speech synthesis whenever user switches views
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('webease-stop-all-audio'));
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [currentView]);
 
   // Check Backend Health
   useEffect(() => {
@@ -194,7 +202,9 @@ export default function App() {
             />
           )}
           {currentView === 'documents' && (
-            <Documents initialPrompt={docInitialPrompt} />
+            <Documents 
+              initialPrompt={docInitialPrompt} 
+            />
           )}
           {currentView === 'history' && (
             <History onRerunCommand={(cmd) => {

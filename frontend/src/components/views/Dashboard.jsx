@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Mic, 
   Globe, 
@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Search as SearchIcon,
-  ExternalLink
+  ExternalLink,
+  Radio
 } from 'lucide-react';
 import { convertWebmToWavBlob } from '../../utils/audio';
 
@@ -22,14 +23,72 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveSpeech, setLiveSpeech] = useState("");
-  const [statusMessage, setStatusMessage] = useState("Click mic or type a command to begin");
+  const [statusMessage, setStatusMessage] = useState("Say \"Hello Agent\" or click mic to begin");
   const [textInput, setTextInput] = useState("");
   const [lastResult, setLastResult] = useState(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [micError, setMicError] = useState(false);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(true);
+  const [wakeWordDetected, setWakeWordDetected] = useState(false);
+  const [handsFreeMode, setHandsFreeMode] = useState(true);
+
+  // Retrieve active browser tab title & URL so backend knows current website (e.g. YouTube search)
+  const getActiveTabContext = async () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.url && !tab.url.startsWith('chrome://')) {
+          return `Active Tab Title: "${tab.title || ''}", URL: "${tab.url || ''}"`;
+        }
+      } catch (e) {
+        console.warn("Could not query active tab:", e);
+      }
+    }
+    return document.title || "WebEase Dashboard";
+  };
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioPlayerRef = useRef(null);
+
+  // VAD & Silence detection refs
+  const audioContextRef = useRef(null);
+  const vadIntervalRef = useRef(null);
+  const hasSpokenRef = useRef(false);
+  const lastSpeechTimeRef = useRef(Date.now());
+  const recordingStartTimeRef = useRef(Date.now());
+
+  // Wake word recognition ref
+  const wakeWordRecognizerRef = useRef(null);
+  const isListeningRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  const wakeWordEnabledRef = useRef(true);
+  const handsFreeModeRef = useRef(true);
+
+  isListeningRef.current = isListening;
+  isProcessingRef.current = isProcessing;
+  wakeWordEnabledRef.current = wakeWordEnabled;
+  handsFreeModeRef.current = handsFreeMode;
+
+  // Stop audio playback immediately when navigating away or on global stop event
+  const stopAudioPlayback = useCallback(() => {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+    }
+    setIsPlayingAudio(false);
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('webease-stop-all-audio', stopAudioPlayback);
+    return () => {
+      window.removeEventListener('webease-stop-all-audio', stopAudioPlayback);
+      stopAudioPlayback();
+    };
+  }, [stopAudioPlayback]);
 
   // Listen for rerun commands triggered from History tab
   useEffect(() => {
@@ -41,6 +100,25 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
     window.addEventListener('webease-rerun-command', handleRerun);
     return () => window.removeEventListener('webease-rerun-command', handleRerun);
   }, []);
+
+  // Play audio chime when wake word is triggered
+  const playWakeChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+      setTimeout(() => audioCtx.close().catch(() => {}), 300);
+    } catch (e) {}
+  };
 
   // Play spoken response via Azure TTS
   const playTTS = async (text) => {
@@ -63,7 +141,10 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
       const audio = new Audio(url);
       audioPlayerRef.current = audio;
 
-      audio.onended = () => setIsPlayingAudio(false);
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        // Mic does NOT auto-restart after command response; user must click mic or say wake word.
+      };
       audio.onerror = () => setIsPlayingAudio(false);
       audio.play();
     } catch (e) {
@@ -72,45 +153,200 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
     }
   };
 
-  // Perform browser action on website (or pass to extension if available)
-  const performAction = (tool, args, responseText) => {
-    // 1. If in Chrome Extension environment, message content script
+  // ─── Send a command to the active tab via background.js ─────────────────
+  const sendToTab = (tool, args) => {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      try {
-        chrome.runtime.sendMessage({
-          type: 'EXECUTE_IN_TAB',
-          tool: tool,
-          args: args || {}
-        });
-      } catch (err) {
-        console.log("Extension message error:", err);
-      }
-    }
-
-    // 2. Browser fallback for web dashboard (localhost:5174)
-    if (tool === 'open_url' && args?.url) {
-      let targetUrl = args.url;
-      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-        targetUrl = 'https://' + targetUrl;
-      }
-      window.open(targetUrl, '_blank');
-    } else if (tool === 'search' && args?.query) {
-      if (args.site === 'youtube') {
-        window.open(`https://duckduckgo.com/?q=!yt+${encodeURIComponent(args.query)}`, '_blank');
-      } else {
-        window.open(`https://www.google.com/search?q=${encodeURIComponent(args.query)}`, '_blank');
-      }
-    } else if (tool === 'play_video' && args?.query) {
-      window.open(`https://duckduckgo.com/?q=!yt+${encodeURIComponent(args.query)}`, '_blank');
-    } else if (tool === 'scroll') {
-      const amount = args?.amount || 500;
-      const direction = args?.direction === 'up' ? -amount : amount;
-      window.scrollBy({ top: direction, behavior: 'smooth' });
-    } else if (tool === 'generate_document') {
-      const docPrompt = args?.title || args?.content || textInput || liveSpeech;
-      if (onCreateDoc) onCreateDoc(docPrompt);
+      chrome.runtime.sendMessage({ type: 'EXECUTE_IN_TAB', tool, args: args || {} },
+        (resp) => {
+          if (chrome.runtime.lastError) {
+            console.warn('Extension message error:', chrome.runtime.lastError.message);
+          }
+        }
+      );
     }
   };
+
+  // ─── Handle every tool action ────────────────────────────────────────────
+  const performAction = async (tool, args, responseText) => {
+    const inExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage;
+
+    // ── Navigation tools (always use extension tab API) ──────────────────
+    if (tool === 'open_url' && args?.url) {
+      if (inExtension) {
+        sendToTab('open_url', args);
+      } else {
+        // Web fallback
+        let url = args.url;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+        window.open(url, '_blank');
+      }
+      return;
+    }
+
+    if (tool === 'search' && args?.query) {
+      if (inExtension) {
+        sendToTab('search', args);
+      } else {
+        const searchUrls = {
+          youtube:   `https://www.youtube.com/results?search_query=${encodeURIComponent(args.query)}`,
+          wikipedia: `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(args.query)}`,
+          bing:      `https://www.bing.com/search?q=${encodeURIComponent(args.query)}`,
+          google:    `https://www.google.com/search?q=${encodeURIComponent(args.query)}`,
+        };
+        window.open(searchUrls[args.site] || searchUrls.google, '_blank');
+      }
+      return;
+    }
+
+    if (tool === 'play_video' && args?.query) {
+      if (inExtension) {
+        sendToTab('play_video', args);
+      } else {
+        window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(args.query)}`, '_blank');
+      }
+      return;
+    }
+
+    if (tool === 'go_back') {
+      if (inExtension) sendToTab('go_back', {});
+      else window.history.back();
+      return;
+    }
+
+    if (tool === 'go_forward') {
+      if (inExtension) sendToTab('go_forward', {});
+      else window.history.forward();
+      return;
+    }
+
+    if (tool === 'scroll') {
+      if (inExtension) {
+        sendToTab('scroll', args);
+      } else {
+        const amount = args?.amount || 500;
+        window.scrollBy({ top: args?.direction === 'up' ? -amount : amount, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    // ── DOM tools — require extension ────────────────────────────────────
+    if (!inExtension) {
+      console.warn(`Tool "${tool}" requires the Chrome extension to be active.`);
+      setStatusMessage(`⚠️ "${tool}" requires the extension — open as a Chrome side panel.`);
+      return;
+    }
+
+    // click, type_text, find_element → pass directly to content script
+    if (['click', 'type_text', 'find_element'].includes(tool)) {
+      sendToTab(tool, args);
+      return;
+    }
+
+    // ── read_page — extract text from tab, then Azure TTS ────────────────
+    if (tool === 'read_page') {
+      setStatusMessage('Extracting page text...');
+      chrome.runtime.sendMessage({ type: 'EXECUTE_IN_TAB', tool: 'read_page', args: {} },
+        async (resp) => {
+          if (chrome.runtime.lastError || !resp?.success) {
+            setStatusMessage('Could not read the page text.');
+            return;
+          }
+          const text = resp?.result?.text || resp?.result?.result?.text || '';
+          if (!text) {
+            setStatusMessage('No readable text found on this page.');
+            return;
+          }
+          // Speak first ~800 words via Azure TTS
+          const snippet = text.split(/\s+/).slice(0, 800).join(' ');
+          setStatusMessage('Reading the page aloud...');
+          await playTTS(snippet);
+        }
+      );
+      return;
+    }
+
+    // ── read_selected_text — get selection, then Azure TTS ───────────────
+    if (tool === 'read_selected_text') {
+      chrome.runtime.sendMessage({ type: 'EXECUTE_IN_TAB', tool: 'read_selected_text', args: {} },
+        async (resp) => {
+          if (chrome.runtime.lastError || !resp?.success) {
+            setStatusMessage('Could not read selected text. Please select some text first.');
+            return;
+          }
+          const text = resp?.result?.text || resp?.result?.result?.text || '';
+          if (!text) {
+            setStatusMessage('No text is selected on the page.');
+            return;
+          }
+          setStatusMessage('Reading selected text...');
+          await playTTS(text);
+        }
+      );
+      return;
+    }
+
+    // ── summarize_page — extract text → backend LLM → Azure TTS ─────────
+    if (tool === 'summarize_page') {
+      setIsProcessing(true);
+      setStatusMessage('Extracting page content...');
+
+      // Step 1: Get full page text via background.js
+      chrome.runtime.sendMessage({ type: 'GET_PAGE_TEXT' }, async (resp) => {
+        const pageText = resp?.text || '';
+
+        if (!pageText) {
+          setStatusMessage('No readable content found on this page.');
+          setIsProcessing(false);
+          return;
+        }
+
+        setStatusMessage('Summarizing with AI...');
+
+        try {
+          // Step 2: Send to backend for LLM summary
+          const res = await fetch(`${BACKEND_URL}/commands/summarize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ page_text: pageText }),
+          });
+
+          if (!res.ok) throw new Error(`Backend error ${res.status}`);
+          const data = await res.json();
+          const summary = data.summary || 'I could not generate a summary.';
+
+          setLastResult(prev => prev ? {
+            ...prev,
+            responseText: summary,
+          } : {
+            command: 'summarize this page',
+            tool: 'summarize_page',
+            args: {},
+            responseText: summary,
+            status: 'success',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+
+          setStatusMessage('Summary ready.');
+          // Step 3: Speak the summary via Azure TTS
+          await playTTS(summary);
+        } catch (err) {
+          console.error('Summarize error:', err);
+          setStatusMessage('Error summarizing the page.');
+        } finally {
+          setIsProcessing(false);
+        }
+      });
+      return;
+    }
+
+    // ── generate_document ─────────────────────────────────────────────────
+    if (tool === 'generate_document') {
+      const docPrompt = args?.title || args?.content || textInput || liveSpeech;
+      if (onCreateDoc) onCreateDoc(docPrompt);
+      return;
+    }
+  };
+
 
   // Process text command (via backend /commands/text)
   const executeTextCommand = async (commandText) => {
@@ -120,10 +356,14 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
     setStatusMessage("Analyzing command with Azure AI Foundry (GPT-4.1 Mini)...");
 
     try {
+      const tabContext = await getActiveTabContext();
       const res = await fetch(`${BACKEND_URL}/commands/text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: commandText, page_context: document.title || "WebEase Dashboard" })
+        body: JSON.stringify({ 
+          text: commandText, 
+          page_context: tabContext 
+        })
       });
 
       if (!res.ok) throw new Error(`Server returned status ${res.status}`);
@@ -160,9 +400,10 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
     setLiveSpeech("Transcribing audio...");
 
     try {
+      const tabContext = await getActiveTabContext();
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('page_context', document.title || "WebEase Voice");
+      formData.append('page_context', tabContext);
 
       const res = await fetch(`${BACKEND_URL}/voice/process`, {
         method: 'POST',
@@ -202,11 +443,17 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
       setStatusMessage(e.message || "Error processing audio.");
     } finally {
       setIsProcessing(false);
+      setWakeWordDetected(false);
     }
   };
 
   const startRecording = async () => {
     try {
+      // Pause wake word recognizer during recording
+      if (wakeWordRecognizerRef.current) {
+        try { wakeWordRecognizerRef.current.abort(); } catch (e) {}
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicError(false);
       const mediaRecorder = new MediaRecorder(stream);
@@ -218,6 +465,15 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
       };
 
       mediaRecorder.onstop = async () => {
+        // Cleanup VAD analyser and audio context
+        if (vadIntervalRef.current) {
+          clearInterval(vadIntervalRef.current);
+          vadIntervalRef.current = null;
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          audioContextRef.current.close().catch(() => {});
+        }
+
         const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         try {
           const wavBlob = await convertWebmToWavBlob(webmBlob);
@@ -228,11 +484,63 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
         stream.getTracks().forEach(track => track.stop());
       };
 
+      // ── Silence Detection (VAD) ───────────────────────────────────────────
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        audioContextRef.current = audioCtx;
+        hasSpokenRef.current = false;
+        lastSpeechTimeRef.current = Date.now();
+        recordingStartTimeRef.current = Date.now();
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
+        vadIntervalRef.current = setInterval(() => {
+          analyser.getByteTimeDomainData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const val = (dataArray[i] - 128) / 128;
+            sum += val * val;
+          }
+          const rms = Math.sqrt(sum / dataArray.length);
+
+          const now = Date.now();
+          const SILENCE_THRESHOLD = 0.025;
+          const SILENCE_TIMEOUT = 2200; // 2.2 seconds of silence after user stops speaking
+          const MAX_INITIAL_SILENCE = 8000; // 8 seconds timeout if no speech at all
+
+          if (rms > SILENCE_THRESHOLD) {
+            hasSpokenRef.current = true;
+            lastSpeechTimeRef.current = now;
+          } else {
+            // If user finished speaking and is silent for > 2.2s, auto-stop
+            if (hasSpokenRef.current && (now - lastSpeechTimeRef.current > SILENCE_TIMEOUT)) {
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+                console.log("Silence detected after speech -> auto-stopping mic...");
+                stopRecording();
+              }
+            } else if (!hasSpokenRef.current && (now - recordingStartTimeRef.current > MAX_INITIAL_SILENCE)) {
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+                console.log("No speech detected after 8s -> stopping mic...");
+                stopRecording();
+              }
+            }
+          }
+        }, 100);
+      } catch (vadErr) {
+        console.warn("VAD setup error:", vadErr);
+      }
+
       mediaRecorder.start();
       setIsListening(true);
       setIsProcessing(false);
       setLiveSpeech("");
-      setStatusMessage("Listening... Speak your command clearly.");
+      setStatusMessage("Listening... Speak your command (auto-stops on silence)");
     } catch (err) {
       console.error("Microphone error:", err);
       setMicError(true);
@@ -241,6 +549,10 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
   };
 
   const stopRecording = () => {
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
     }
@@ -251,6 +563,94 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
     if (isListening) stopRecording();
     else startRecording();
   };
+
+  const [heardSnippet, setHeardSnippet] = useState("");
+  const wakeWordRestartTimeoutRef = useRef(null);
+
+  // ── Wake Word Recognition ("Hello Agent") ──────────────────────────────────
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.log("SpeechRecognition not supported by browser for wake-word.");
+      return;
+    }
+
+    if (!wakeWordEnabled || isListening || isProcessing) {
+      if (wakeWordRecognizerRef.current) {
+        try { wakeWordRecognizerRef.current.abort(); } catch (e) {}
+      }
+      return;
+    }
+
+    let recognition = null;
+    try {
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript.toLowerCase() + ' ';
+        }
+
+        const cleanTranscript = transcript.trim();
+        setHeardSnippet(cleanTranscript.slice(-35));
+
+        // Flexible regex & phrase matching for "Hello Agent"
+        const isWakeMatch = 
+          cleanTranscript.includes('hello agent') ||
+          cleanTranscript.includes('hey agent') ||
+          cleanTranscript.includes('hi agent') ||
+          cleanTranscript.includes('hello agents') ||
+          cleanTranscript.includes('hello asian') ||
+          cleanTranscript.includes('hello urgent') ||
+          cleanTranscript.includes('hello agant') ||
+          /\b(hello|hey|hi|helo)\s*(agent|agency|asian|urgent|agents)\b/i.test(cleanTranscript);
+
+        if (isWakeMatch) {
+          console.log("Wake word recognized ('Hello Agent'):", cleanTranscript);
+          try { recognition.abort(); } catch (e) {}
+          setWakeWordDetected(true);
+          playWakeChime();
+          setStatusMessage("⚡ \"Hello Agent\" heard! Listening for your command...");
+          setTimeout(() => {
+            startRecording();
+          }, 200);
+        }
+      };
+
+      recognition.onerror = (e) => {
+        if (e.error === 'not-allowed') {
+          console.warn("Microphone access not permitted for speech recognition.");
+          setMicError(true);
+        }
+      };
+
+      recognition.onend = () => {
+        // Auto-restart wake word with debounce if enabled and not recording
+        if (wakeWordRestartTimeoutRef.current) clearTimeout(wakeWordRestartTimeoutRef.current);
+        wakeWordRestartTimeoutRef.current = setTimeout(() => {
+          if (wakeWordEnabledRef.current && !isListeningRef.current && !isProcessingRef.current) {
+            try { recognition.start(); } catch (e) {}
+          }
+        }, 250);
+      };
+
+      recognition.start();
+      wakeWordRecognizerRef.current = recognition;
+    } catch (err) {
+      console.warn("Wake word startup error:", err);
+    }
+
+    return () => {
+      if (wakeWordRestartTimeoutRef.current) clearTimeout(wakeWordRestartTimeoutRef.current);
+      if (recognition) {
+        try { recognition.abort(); } catch (e) {}
+      }
+    };
+  }, [wakeWordEnabled, isListening, isProcessing]);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -298,6 +698,7 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
           <p style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500, marginTop: '2px' }}>
             {statusMessage}
           </p>
+          
           {micError && typeof chrome !== 'undefined' && chrome.runtime && (
             <button 
               onClick={() => window.open(chrome.runtime.getURL('index.html'), '_blank')}
@@ -363,7 +764,7 @@ export default function Dashboard({ onNavigate, onCreateDoc }) {
             "Read page"
           </button>
           <button type="button" className="prompt-pill" onClick={() => {
-            if (onCreateDoc) onCreateDoc("Draft a complete summary of modern accessibility standards.");
+            if (onCreateDoc) onCreateDoc("Draft an accessibility notes document.");
           }}>
             "Create Doc"
           </button>

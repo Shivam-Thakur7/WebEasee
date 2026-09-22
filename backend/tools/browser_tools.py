@@ -32,13 +32,20 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "click",
-            "description": "Click on a webpage element identified by a CSS selector or visible text.",
+            "description": (
+                "Click on a webpage element identified by a CSS selector, visible text label, "
+                "or a positional descriptor like 'first video', 'second result', 'third link'. "
+                "Use this for positional video/link clicks on the current page."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "selector": {
                         "type": "string",
-                        "description": "CSS selector or visible text of the element to click."
+                        "description": (
+                            "CSS selector, visible text of the element, or positional phrase "
+                            "e.g. 'first video', 'second result', 'Subscribe button'."
+                        )
                     }
                 },
                 "required": ["selector"]
@@ -49,7 +56,10 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "type_text",
-            "description": "Type text into the currently focused or specified input field.",
+            "description": (
+                "Type text into an input field or text area on the current page. "
+                "Use selector to target a specific field. Set submit=true to press Enter after typing."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -60,7 +70,12 @@ BROWSER_TOOLS = [
                     "selector": {
                         "type": "string",
                         "description": "Optional CSS selector of the input field.",
-                        "default": "input:focus, textarea:focus"
+                        "default": ""
+                    },
+                    "submit": {
+                        "type": "boolean",
+                        "description": "If true, press Enter after typing to submit the form. Default false.",
+                        "default": False
                     }
                 },
                 "required": ["text"]
@@ -71,7 +86,12 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "open_url",
-            "description": "Open a URL in the current tab.",
+            "description": (
+                "Navigate the current tab to a URL or website homepage. "
+                "Use ONLY when the user wants to visit a homepage/URL with no search query "
+                "(e.g. 'open youtube', 'go to github.com'). "
+                "Do NOT use this for search queries — use 'search' instead."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -88,7 +108,11 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Search for a query on a given site (default Google).",
+            "description": (
+                "Search for a query on a given site (default Google). "
+                "Use this when the user says 'search for X', 'find X on YouTube', "
+                "'search YouTube for X', 'look up X', etc."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -127,7 +151,10 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_page",
-            "description": "Read out the main visible text of the current webpage using text-to-speech.",
+            "description": (
+                "Read out the main visible text of the current webpage aloud using text-to-speech. "
+                "Use when the user says 'read this page', 'read the page to me', 'read aloud', etc."
+            ),
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
     },
@@ -135,7 +162,7 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_selected_text",
-            "description": "Read out the currently selected/highlighted text using text-to-speech.",
+            "description": "Read out the currently selected/highlighted text on the page using text-to-speech.",
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
     },
@@ -143,13 +170,13 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "find_element",
-            "description": "Find and highlight an element on the page by description.",
+            "description": "Find and visually highlight an element on the page by natural language description.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "description": {
                         "type": "string",
-                        "description": "Natural language description of the element to find, e.g. 'search bar' or 'subscribe button'."
+                        "description": "Natural language description of the element, e.g. 'search bar', 'subscribe button'."
                     }
                 },
                 "required": ["description"]
@@ -160,19 +187,35 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "play_video",
-            "description": "Play a specific video or song directly on YouTube.",
+            "description": (
+                "Search YouTube for a specific video or song and navigate to the results. "
+                "Use when user says 'play X on YouTube', 'play the song X', etc. "
+                "For clicking a positional video already on screen, use the 'click' tool instead."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The name of the video or song to play, e.g. 'despacito' or 'cats funny video'."
+                        "description": "The name of the video or song to play, e.g. 'despacito'."
                     }
                 },
                 "required": ["query"]
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_page",
+            "description": (
+                "Summarize the content of the current webpage and read the summary aloud. "
+                "Use when user says 'summarize this page', 'give me a summary', "
+                "'what is this page about', 'summarise the article', 'tldr this page', etc."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
 ]
 
 # Quick lookup by name

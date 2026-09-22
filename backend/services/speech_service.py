@@ -44,6 +44,9 @@ class SpeechService:
     def _transcribe_sync(self, audio_bytes: bytes) -> dict:
         """Blocking STT call — run in executor to keep FastAPI async."""
         import azure.cognitiveservices.speech as speechsdk
+        tmp_path = None
+        recognizer = None
+        audio_cfg = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp.write(audio_bytes)
@@ -55,15 +58,6 @@ class SpeechService:
                 speech_config=cfg, audio_config=audio_cfg
             )
             result = recognizer.recognize_once()
-            
-            # Explicitly delete references so Azure SDK releases the file handle
-            del recognizer
-            del audio_cfg
-            
-            try:
-                os.unlink(tmp_path)
-            except Exception as e:
-                logger.warning(f"Could not delete temp file {tmp_path}: {e}")
 
             if result.reason == speechsdk.ResultReason.RecognizedSpeech:
                 return {"text": result.text, "confidence": 1.0, "status": "success"}
@@ -81,6 +75,14 @@ class SpeechService:
         except Exception as e:
             logger.error(f"STT error: {e}")
             return {"text": "", "confidence": 0.0, "status": "error", "detail": str(e)}
+        finally:
+            del recognizer
+            del audio_cfg
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception as e:
+                    logger.warning(f"Could not delete temp file {tmp_path}: {e}")
 
 
 # Singleton — no Azure connection made here

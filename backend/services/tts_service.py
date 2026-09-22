@@ -1,4 +1,4 @@
-﻿"""
+"""
 WebEase — Azure AI Speech TTS Service
 Lazy initialization — does NOT connect to Azure at import time.
 """
@@ -48,20 +48,18 @@ class TTSService:
               </voice>
             </speak>"""
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp_path = tmp.name
-
-            audio_cfg = speechsdk.audio.AudioOutputConfig(filename=tmp_path)
             synthesizer = speechsdk.SpeechSynthesizer(
-                speech_config=cfg, audio_config=audio_cfg
+                speech_config=cfg, audio_config=None
             )
             result = synthesizer.speak_ssml_async(ssml).get()
 
             if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-                with open(tmp_path, "rb") as f:
-                    audio_bytes = f.read()
-                os.unlink(tmp_path)
-                return {"audio_bytes": audio_bytes, "status": "success"}
+                return {"audio_bytes": result.audio_data, "status": "success"}
+            elif result.reason == speechsdk.ResultReason.Canceled:
+                cancellation = result.cancellation_details
+                err_detail = f"TTS Canceled: {cancellation.reason} - {cancellation.error_details}"
+                logger.error(err_detail)
+                return {"audio_bytes": None, "status": "error", "detail": err_detail}
             else:
                 return {"audio_bytes": None, "status": "error", "detail": str(result.reason)}
 

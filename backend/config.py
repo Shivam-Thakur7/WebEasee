@@ -43,6 +43,7 @@ ALLOWED_BROWSER_TOOLS: list[str] = [
     "read_selected_text",
     "find_element",
     "play_video",
+    "summarize_page",
 ]
 
 def validate_config() -> list[str]:

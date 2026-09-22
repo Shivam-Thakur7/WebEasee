@@ -16,17 +16,67 @@ logger = logging.getLogger("webease.foundry")
 SYSTEM_PROMPT = """You are WebEase, an AI accessibility assistant embedded in a Chrome browser extension.
 Your job is to help physically disabled users control their browser and create documents using voice commands.
 
-When the user speaks a command:
-- Choose the most appropriate browser tool or document tool to call.
-- Be precise with tool arguments.
-- Never perform actions outside the allowed tool list.
-- For ambiguous commands, ask for clarification rather than guessing.
-- Always respond in a friendly, concise manner.
+When the user speaks a command, choose the MOST APPROPRIATE tool from the list below.
 
-Allowed browser actions: scroll, click, type_text, open_url, search, go_back, go_forward,
-read_page, read_selected_text, find_element, play_video.
-Allowed document actions: generate_document, summarize_document.
+## Tool Selection Rules
+
+### Navigation
+- "open youtube", "go to github.com", "open google" → `open_url` with the homepage URL.
+  Do NOT use open_url for search queries.
+
+### Search
+- "search for X", "look up X", "find X", "search youtube for X", "search X on google" → `search` with the correct site and query.
+- "search youtube for guitar" → `search` with site="youtube", query="guitar".
+- NEVER use `open_url` when there is a search query involved.
+
+### Play a specific video/song
+- "play Bohemian Rhapsody", "play despacito on youtube" → `play_video` with query="Bohemian Rhapsody".
+  This navigates to YouTube search results for that song/video.
+
+### Positional click (already on a page)
+- "play the first video", "click the second result", "open the 3rd link", "play video 1" →
+  `click` with selector="first video" (or "second result", etc.).
+  NEVER ask for a site when the user says "first video" / "second result" — they mean what is visible on screen.
+
+### Reading aloud
+- "read this page", "read aloud", "read the page to me" → `read_page`
+- "read the selected text", "read what I highlighted" → `read_selected_text`
+
+### Summarise
+- "summarise this page", "summarize", "give me a summary", "what is this page about",
+  "tldr", "summarise the article", "brief me on this page" → `summarize_page`
+
+### Scroll
+- "scroll down", "scroll up 300 pixels" → `scroll` with direction and amount.
+
+### Type text
+- "type hello in the search bar", "type my name" → `type_text` with text and optional selector.
+  Set submit=true ONLY if user says "and submit" / "and search" / "press enter".
+
+### History
+- "go back", "previous page" → `go_back`
+- "go forward", "next page" → `go_forward`
+
+### Find element
+- "find the subscribe button", "highlight the search box" → `find_element` with description.
+
+### Documents
+- "create a document about X", "write a document on Y" → `generate_document`
+- "summarise the document" (referring to a WebEase doc, not a webpage) → `summarize_document`
+
+### Greetings / no action
+- "hello agent", "hey", "hi" → reply with a brief, friendly confirmation only; do NOT call any tool.
+
+### Ambiguous
+- If genuinely unclear, ask for clarification.
+
+Always respond in a clear, friendly, and concise manner.
 """
+
+SUMMARIZE_SYSTEM_PROMPT = """You are a helpful assistant. The user has shared the text content of a webpage.
+Write a concise, spoken-word summary (2-4 sentences) of the most important information.
+Focus on the key points. Respond naturally as if speaking aloud to the user.
+Do NOT include markdown, bullet points, or headers — just plain spoken sentences."""
 
 
 class FoundryService:
@@ -139,21 +189,53 @@ class FoundryService:
                 "status": "error",
             }
 
+    async def summarize_page(self, page_text: str) -> str:
+        """
+        Given raw page text, ask the LLM to produce a concise spoken summary.
+        Returns the summary string.
+        """
+        if not config.AZURE_AI_ENDPOINT:
+            return "Azure AI is not configured."
+        if not page_text or not page_text.strip():
+            return "The page appears to have no readable text."
+
+        try:
+            client = self._get_client()
+            # Truncate to ~4000 chars to stay within context limits
+            truncated = page_text.strip()[:4000]
+
+            messages = [
+                {"role": "system", "content": SUMMARIZE_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Page content:\n\n{truncated}"},
+            ]
+
+            response = client.chat.completions.create(
+                model=config.AZURE_AI_MODEL,
+                messages=messages,
+                max_tokens=300,
+            )
+            return response.choices[0].message.content or "I couldn't generate a summary."
+        except Exception as e:
+            logger.error(f"Summarize error: {e}")
+            return "Sorry, I couldn't summarize the page right now."
+
     def _build_response_text(self, tool: str, args: dict) -> str:
         """Generate a short spoken confirmation for each tool."""
         responses = {
-            "scroll":            lambda a: f"Scrolling {a.get('direction', 'down')}.",
-            "click":             lambda a: f"Clicking {a.get('selector', 'the element')}.",
-            "type_text":         lambda a: f"Typing: {a.get('text', '')}.",
-            "open_url":          lambda a: f"Opening {a.get('url', 'the page')}.",
-            "search":            lambda a: f"Searching {a.get('site','Google')} for {a.get('query','')}.",
-            "go_back":           lambda a: "Going back.",
-            "go_forward":        lambda a: "Going forward.",
-            "read_page":         lambda a: "Reading the page.",
-            "read_selected_text":lambda a: "Reading selected text.",
-            "find_element":      lambda a: f"Finding {a.get('description', 'the element')}.",
-            "generate_document": lambda a: f"Generating document: {a.get('title', '')}.",
-            "summarize_document":lambda a: "Summarizing the document.",
+            "scroll":             lambda a: f"Scrolling {a.get('direction', 'down')}.",
+            "click":              lambda a: f"Clicking {a.get('selector', 'the element')}.",
+            "type_text":          lambda a: f"Typing: {a.get('text', '')}.",
+            "open_url":           lambda a: f"Opening {a.get('url', 'the page')}.",
+            "search":             lambda a: f"Searching {a.get('site', 'Google')} for {a.get('query', '')}.",
+            "go_back":            lambda a: "Going back.",
+            "go_forward":         lambda a: "Going forward.",
+            "read_page":          lambda a: "Reading the page.",
+            "read_selected_text": lambda a: "Reading selected text.",
+            "find_element":       lambda a: f"Finding {a.get('description', 'the element')}.",
+            "play_video":         lambda a: f"Playing {a.get('query', 'the video')} on YouTube.",
+            "summarize_page":     lambda a: "Summarizing the page for you.",
+            "generate_document":  lambda a: f"Generating document: {a.get('title', '')}.",
+            "summarize_document": lambda a: "Summarizing the document.",
         }
         fn = responses.get(tool)
         return fn(args) if fn else f"Executing {tool}."

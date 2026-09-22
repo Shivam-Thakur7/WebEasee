@@ -2,9 +2,14 @@ export async function convertWebmToWavBlob(webmBlob) {
   const arrayBuffer = await webmBlob.arrayBuffer();
   // Decode the webm audio via the browser's native AudioContext
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  
-  return bufferToWav(audioBuffer);
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    return bufferToWav(audioBuffer);
+  } finally {
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => {});
+    }
+  }
 }
 
 function bufferToWav(abuffer) {
