@@ -9,7 +9,8 @@ import {
   FileText, 
   History as HistoryIcon, 
   Settings as SettingsIcon,
-  User as UserIcon
+  User as UserIcon,
+  Mic
 } from 'lucide-react';
 
 import Dashboard from './components/views/Dashboard';
@@ -17,6 +18,78 @@ import Documents from './components/views/Documents';
 import History from './components/views/History';
 import Settings from './components/views/Settings';
 import Profile from './components/views/Profile';
+
+function FloatingMic({ visible }) {
+  const [micState, setMicState] = useState({
+    isListening: false,
+    isProcessing: false,
+    statusMessage: '',
+    micError: false,
+    liveSpeech: ''
+  });
+
+  useEffect(() => {
+    const handleStateUpdate = (e) => setMicState(e.detail);
+    window.addEventListener('webease-mic-state', handleStateUpdate);
+    return () => window.removeEventListener('webease-mic-state', handleStateUpdate);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'absolute',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: '8px'
+      }}
+    >
+      {micState.statusMessage && (
+        <div style={{
+          background: 'rgba(0,0,0,0.75)',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: '12px',
+          fontSize: '11px',
+          maxWidth: '200px',
+          textAlign: 'right',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {micState.statusMessage}
+        </div>
+      )}
+      
+      <div style={{ position: 'relative' }}>
+        {micState.isListening && (
+          <>
+            <div className="pulse-ring pulse-ring-1"></div>
+            <div className="pulse-ring pulse-ring-2"></div>
+          </>
+        )}
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('webease-toggle-mic'))}
+          className={`main-mic-btn ${micState.isListening ? 'listening' : ''} ${micState.micError ? 'error' : ''}`}
+          style={{ 
+            width: '48px', height: '48px', 
+            boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+            margin: 0 // override margin from main-mic-btn class if any
+          }}
+          title="Toggle Global Microphone"
+        >
+          <div className="mic-icon-wrapper" style={{ transform: 'scale(0.8)' }}>
+            <Mic size={24} strokeWidth={2.5} />
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -187,7 +260,7 @@ export default function App() {
         </nav>
 
         {/* Main Body Content */}
-        <div className="views-body" style={{ position: 'relative' }}>
+        <div className="views-body" style={{ position: 'relative', paddingBottom: currentView !== 'dashboard' ? '80px' : '16px' }}>
           <div style={{ display: currentView === 'dashboard' ? 'block' : 'none', height: '100%' }}>
             <Dashboard 
               onNavigate={setCurrentView} 
@@ -221,6 +294,8 @@ export default function App() {
               setTheme={setTheme}
             />
           )}
+
+          <FloatingMic visible={currentView !== 'dashboard'} />
         </div>
       </div>
     </div>

@@ -45,6 +45,7 @@ ALLOWED_BROWSER_TOOLS: list[str] = [
     "play_video",
     "summarize_page",
     "extension_action",
+    "delete_history_item",
 ]
 
 def validate_config() -> list[str]:

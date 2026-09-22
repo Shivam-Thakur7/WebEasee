@@ -93,11 +93,17 @@ function findPositionalElement(selector) {
   }
 
   // Google / Bing / DuckDuckGo search result links
-  const searchLinks = Array.from(document.querySelectorAll(
-    '#search .g a h3, #search .g > div > div > a, [data-testid="result-title-a"], li.b_algo h2 a, a[role="heading"]'
-  )).filter(el => el.offsetParent !== null);
-  if (searchLinks[index]) {
-    return searchLinks[index].closest('a') || searchLinks[index];
+  let searchLinks = Array.from(document.querySelectorAll(
+    '.g a h3, a h3, h3 a, .yuRUbf a, [data-testid="result-title-a"], li.b_algo h2 a, a[role="heading"]'
+  ))
+  .map(el => el.closest('a') || el)
+  .filter(el => el && el.offsetParent !== null && el.href && !el.href.startsWith('javascript'));
+
+  // Deduplicate links since multiple selectors might hit the parent <a> and child <h3>
+  searchLinks = [...new Set(searchLinks)];
+
+  if (searchLinks.length > 0 && searchLinks[index]) {
+    return searchLinks[index];
   }
 
   // Generic list of prominent page links (filtered for likely content links)

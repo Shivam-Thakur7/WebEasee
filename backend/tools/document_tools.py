@@ -1,4 +1,4 @@
-﻿"""
+"""
 WebEase — Document Tool Definitions
 Foundry function-calling schemas for document operations.
 """
@@ -52,6 +52,22 @@ DOCUMENT_TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "download_document",
+            "description": "Download the currently generated document.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_document",
+            "description": "Read aloud the currently generated or uploaded document.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    }
 ]
 
 DOCUMENT_TOOLS_MAP = {t["function"]["name"]: t for t in DOCUMENT_TOOLS}

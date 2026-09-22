@@ -3,7 +3,7 @@ import {
   Mic, 
   Globe, 
   Volume2, 
-  FileText, 
+  FileText,
   Send, 
   Play, 
   Pause, 
@@ -446,10 +446,15 @@ export default function Dashboard({
       return;
     }
 
-    // ── generate_document ─────────────────────────────────────────────────
-    if (tool === 'generate_document') {
-      const docPrompt = args?.title || args?.content || textInput || liveSpeech;
-      if (onCreateDoc) onCreateDoc(docPrompt);
+    // ── Document & History Tools ──────────────────────────────────────────
+    if (['generate_document', 'download_document', 'read_document', 'delete_history_item'].includes(tool)) {
+      if (tool === 'generate_document') {
+        const docPrompt = args?.title || args?.content || textInput || liveSpeech;
+        if (onCreateDoc) onCreateDoc(docPrompt);
+      }
+      
+      // Dispatch event for the active view to handle
+      window.dispatchEvent(new CustomEvent(`webease-tool-${tool}`, { detail: args || {} }));
       return;
     }
   };
@@ -876,6 +881,20 @@ export default function Dashboard({
       cleanupActiveRecognizer();
     };
   }, [wakeWordEnabled, isListening, isProcessing]);
+
+  // Sync mic state to the global floating mic in App.jsx
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('webease-mic-state', {
+      detail: { isListening, isProcessing, statusMessage, micError, liveSpeech }
+    }));
+  }, [isListening, isProcessing, statusMessage, micError, liveSpeech]);
+
+  // Listen for global mic toggle events
+  useEffect(() => {
+    const handleToggle = () => handleMicClick();
+    window.addEventListener('webease-toggle-mic', handleToggle);
+    return () => window.removeEventListener('webease-toggle-mic', handleToggle);
+  }, [handleMicClick]);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();

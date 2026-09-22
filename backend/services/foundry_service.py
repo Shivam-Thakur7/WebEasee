@@ -27,7 +27,8 @@ When the user speaks a command, choose the MOST APPROPRIATE tool from the list b
 ### Search
 - "search for X", "look up X", "find X", "search youtube for X", "search X on google" → `search` with the correct site and query.
 - "search youtube for guitar" → `search` with site="youtube", query="guitar".
-- NEVER use `open_url` when there is a search query involved.
+- "open youtube and search for karanaujla" → `search` with site="youtube", query="karanaujla".
+- NEVER use `open_url` when there is a search query involved, even if the user explicitly says "open [site] and search". Only use the `search` tool.
 
 ### Play a specific video/song
 - "play Bohemian Rhapsody", "play despacito on youtube" → `play_video` with query="Bohemian Rhapsody".
@@ -37,6 +38,9 @@ When the user speaks a command, choose the MOST APPROPRIATE tool from the list b
 - "play the first video", "click the second result", "open the 3rd link", "play video 1" →
   `click` with selector="first video" (or "second result", etc.).
   NEVER ask for a site when the user says "first video" / "second result" — they mean what is visible on screen.
+- "open the link with name Google Cloud", "click Google Cloud", "open the Wikipedia result" →
+  `click` with selector="Google Cloud" (or "Wikipedia").
+  Use `click` (NOT `open_url`) when the user asks to open something specific that is likely a link on the current page.
 
 ### Reading aloud
 - "read this page", "read aloud", "read the page to me" → `read_page`
@@ -62,7 +66,12 @@ When the user speaks a command, choose the MOST APPROPRIATE tool from the list b
 
 ### Documents
 - "create a document about X", "write a document on Y" → `generate_document`
+- "download it", "download the document" → `download_document`
+- "read it", "read the document aloud" → `read_document`
 - "summarise the document" (referring to a WebEase doc, not a webpage) → `summarize_document`
+
+### History
+- "delete the one I don't want", "delete the last command" → `delete_history_item`
 
 ### Extension UI Controls
 - "toggle dark mode", "switch to dark theme", "change theme" → `extension_action` with action="toggle_theme"
@@ -156,7 +165,7 @@ class FoundryService:
                 tool_args = json.loads(tool_call.function.arguments)
 
                 # Security: enforce allow-list
-                allowed = config.ALLOWED_BROWSER_TOOLS + ["generate_document", "summarize_document"]
+                allowed = config.ALLOWED_BROWSER_TOOLS + ["generate_document", "summarize_document", "download_document", "read_document"]
                 if tool_name not in allowed:
                     logger.warning(f"Blocked disallowed tool: {tool_name}")
                     return {

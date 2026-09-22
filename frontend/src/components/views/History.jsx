@@ -41,6 +41,34 @@ export default function History({ onRerunCommand }) {
     }
   };
 
+  // Voice Command Listener
+  useEffect(() => {
+    const handleVoiceDelete = async (e) => {
+      const args = e.detail || {};
+      const index = args.index || 0;
+      
+      // We need the current historyItems, so we use a functional update or rely on the fact that 
+      // handleVoiceDelete is re-created with the latest historyItems.
+      // But we can just use the state variable since it's in the dependency array.
+      if (historyItems && historyItems.length > index) {
+        const itemToDelete = historyItems[index];
+        try {
+          await fetch(`${BACKEND_URL}/history/${itemToDelete.id}`, { method: 'DELETE' });
+          fetchHistory(); // refresh list
+        } catch (err) {
+          console.error("Failed to delete history via voice:", err);
+        }
+      } else if (historyItems.length === 0) {
+        console.log("History is already empty");
+      }
+    };
+
+    window.addEventListener('webease-tool-delete_history_item', handleVoiceDelete);
+    return () => {
+      window.removeEventListener('webease-tool-delete_history_item', handleVoiceDelete);
+    };
+  }, [historyItems]);
+
   const playTTS = async (text) => {
     if (!text) return;
     try {

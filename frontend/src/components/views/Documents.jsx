@@ -137,6 +137,42 @@ export default function Documents({ initialPrompt = '' }) {
     };
   }, [audioObj]);
 
+  // Voice Command Event Listeners
+  useEffect(() => {
+    const handleVoiceGenerate = (e) => {
+      const args = e.detail || {};
+      const docPrompt = args.title || args.content || prompt;
+      if (docPrompt && docPrompt !== prompt) {
+        setPrompt(docPrompt);
+      }
+      setTimeout(() => {
+        // Trigger handleGenerate by clicking the button to ensure state is fresh
+        const genBtn = document.getElementById('generate-doc-btn');
+        if (genBtn) genBtn.click();
+      }, 50);
+    };
+
+    const handleVoiceDownload = () => {
+      const dlBtn = document.getElementById('download-doc-btn');
+      if (dlBtn) dlBtn.click();
+    };
+
+    const handleVoiceRead = () => {
+      const readBtn = document.getElementById('read-doc-btn');
+      if (readBtn) readBtn.click();
+    };
+
+    window.addEventListener('webease-tool-generate_document', handleVoiceGenerate);
+    window.addEventListener('webease-tool-download_document', handleVoiceDownload);
+    window.addEventListener('webease-tool-read_document', handleVoiceRead);
+    
+    return () => {
+      window.removeEventListener('webease-tool-generate_document', handleVoiceGenerate);
+      window.removeEventListener('webease-tool-download_document', handleVoiceDownload);
+      window.removeEventListener('webease-tool-read_document', handleVoiceRead);
+    };
+  }, [prompt]);
+
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -229,6 +265,7 @@ export default function Documents({ initialPrompt = '' }) {
             </div>
 
             <button 
+              id="generate-doc-btn"
               className="btn-primary" 
               onClick={handleGenerate} 
               disabled={isGenerating || !prompt.trim()}
@@ -274,6 +311,7 @@ export default function Documents({ initialPrompt = '' }) {
                   </button>
                   
                   <a 
+                    id="download-doc-btn"
                     href={generatedDoc.downloadUrl} 
                     download={generatedDoc.filename}
                     className="btn-primary"
@@ -301,6 +339,7 @@ export default function Documents({ initialPrompt = '' }) {
               </div>
 
               <button 
+                id="read-doc-btn"
                 className="btn-secondary"
                 onClick={() => handlePlayTTS(generatedDoc.content)}
                 style={{ alignSelf: 'flex-start' }}

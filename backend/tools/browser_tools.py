@@ -90,7 +90,8 @@ BROWSER_TOOLS = [
                 "Navigate the current tab to a URL or website homepage. "
                 "Use ONLY when the user wants to visit a homepage/URL with no search query "
                 "(e.g. 'open youtube', 'go to github.com'). "
-                "Do NOT use this for search queries — use 'search' instead."
+                "Do NOT use this for search queries — use 'search' instead. If the user says 'open youtube and search...', use ONLY the 'search' tool. "
+                "Do NOT use this when the user asks to open a specific link that is already visible on the current page (e.g. 'open the Google Cloud link') — use 'click' instead."
             ),
             "parameters": {
                 "type": "object",
@@ -240,6 +241,23 @@ BROWSER_TOOLS = [
                     }
                 },
                 "required": ["action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_history_item",
+            "description": "Delete an item from the history. If no index is provided, it deletes the most recent item.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "index": {
+                        "type": "integer",
+                        "description": "The index of the history item to delete, starting from 0. 0 is the most recent."
+                    }
+                },
+                "required": []
             }
         }
     }
