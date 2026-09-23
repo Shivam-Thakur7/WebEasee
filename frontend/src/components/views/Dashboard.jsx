@@ -174,9 +174,15 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
         }, async (response) => {
           if (tool === 'summarize_page' && response && response.success && response.result) {
             try {
-              // Extract the actual text from the nested result object
-              const pageText = typeof response.result === 'object' ? response.result.result : response.result;
-              if (!pageText) throw new Error("No text returned from page");
+              // Extract the actual text from the deeply nested result object
+              let pageText = response.result;
+              while (typeof pageText === 'object' && pageText !== null) {
+                pageText = pageText.text || pageText.result || "";
+              }
+              
+              if (!pageText || typeof pageText !== 'string') {
+                throw new Error("No text returned from page");
+              }
 
               setStatusMessage("Generating page summary...");
               const res = await fetch(`${BACKEND_URL}/commands/summarize`, {
