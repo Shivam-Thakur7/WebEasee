@@ -207,8 +207,8 @@ export default function Documents({ initialPrompt = '' }) {
     <section className="view-section">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>AI Document Studio</h2>
-          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Generate, summarize & speak documents</p>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>AI Document Studio</h2>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Generate, summarize & speak documents</p>
         </div>
         <div className="tab-pills">
           <button 
@@ -227,20 +227,20 @@ export default function Documents({ initialPrompt = '' }) {
       </div>
 
       {activeTab === 'create' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label htmlFor="doc-prompt-input" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label htmlFor="doc-prompt-input" style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>
               What document should Azure AI write?
             </label>
             <textarea 
               id="doc-prompt-input" 
-              rows="3" 
+              rows="4" 
               placeholder="e.g. Write a comprehensive guide on modern accessibility in web apps..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             ></textarea>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               <button 
                 type="button"
                 onClick={() => setPrompt('Write a 500-word article about artificial intelligence and voice computing.')} 
@@ -286,27 +286,27 @@ export default function Documents({ initialPrompt = '' }) {
           </div>
 
           {errorMsg && (
-            <div style={{ padding: '8px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px', fontSize: '11.5px', fontWeight: 600 }}>
+            <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', borderRadius: '10px', fontSize: '12px', fontWeight: 600 }}>
               {errorMsg}
             </div>
           )}
           
           {generatedDoc && (
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <FileText size={16} color="var(--brand-600)" />
-                  <h3 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-primary)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(32, 45, 68, 0.8)', paddingBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} color="var(--neon-cyan)" />
+                  <h3 style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>
                     {generatedDoc.title}
                   </h3>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button 
                     onClick={handleCopy}
                     className="btn-secondary"
-                    style={{ padding: '4px 8px', fontSize: '10.5px' }}
+                    style={{ padding: '6px 10px', fontSize: '11px' }}
                   >
-                    {copied ? <Check size={12} color="var(--emerald-600)" /> : <Copy size={12} />}
+                    {copied ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                   
@@ -315,22 +315,22 @@ export default function Documents({ initialPrompt = '' }) {
                     href={generatedDoc.downloadUrl} 
                     download={generatedDoc.filename}
                     className="btn-primary"
-                    style={{ padding: '4px 10px', fontSize: '10.5px', textDecoration: 'none' }}
+                    style={{ padding: '6px 12px', fontSize: '11px', textDecoration: 'none' }}
                   >
-                    <Download size={12} />
+                    <Download size={14} />
                     <span>Download .docx</span>
                   </a>
                 </div>
               </div>
 
               <div style={{ 
-                fontSize: '12px', 
-                color: 'var(--text-primary)', 
-                background: 'var(--bg-card-secondary)', 
-                padding: '12px', 
-                borderRadius: '8px', 
-                border: '1px solid var(--border-color)', 
-                maxHeight: '180px', 
+                fontSize: '13px', 
+                color: 'var(--text-secondary)', 
+                background: 'rgba(7, 9, 14, 0.8)', 
+                padding: '14px', 
+                borderRadius: '12px', 
+                border: '1px solid rgba(32, 45, 68, 0.9)', 
+                maxHeight: '220px', 
                 overflowY: 'auto', 
                 whiteSpace: 'pre-wrap', 
                 lineHeight: 1.5 
@@ -344,7 +344,7 @@ export default function Documents({ initialPrompt = '' }) {
                 onClick={() => handlePlayTTS(generatedDoc.content)}
                 style={{ alignSelf: 'flex-start' }}
               >
-                <Volume2 size={14} color="var(--brand-600)" />
+                <Volume2 size={15} color="var(--neon-cyan)" />
                 <span>Read Generated Doc Aloud</span>
               </button>
             </div>
@@ -353,32 +353,33 @@ export default function Documents({ initialPrompt = '' }) {
       )}
 
       {activeTab === 'read' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* TTS Player Bar */}
-          <div style={{ backgroundColor: 'var(--slate-900)', color: '#ffffff', padding: '14px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="card" style={{ background: 'rgba(7, 9, 14, 0.85)', border: '1px solid rgba(0, 242, 254, 0.25)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--brand-200)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--neon-cyan)', textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.06em' }}>
                 Azure Neural TTS Reader
               </span>
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <button 
                   onClick={() => handlePlayTTS(readText)}
-                  style={{ padding: '6px 10px', background: 'var(--brand-600)', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '11px' }}
+                  className="btn-primary"
+                  style={{ padding: '6px 12px', fontSize: '11px' }}
                 >
-                  <Play size={12} fill="white" /> Play
+                  <Play size={14} fill="white" /> Play
                 </button>
                 <button 
                   onClick={handleStopTTS}
-                  style={{ padding: '6px 10px', background: '#dc2626', border: 'none', borderRadius: '6px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '11px' }}
+                  style={{ padding: '6px 12px', background: 'rgba(239, 68, 68, 0.3)', border: '1px solid rgba(239, 68, 68, 0.5)', borderRadius: '10px', color: '#fca5a5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '11px' }}
                 >
-                  <Square size={12} fill="white" /> Stop
+                  <Square size={14} fill="#fca5a5" /> Stop
                 </button>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', fontSize: '11px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', fontSize: '12px' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--slate-400)', fontWeight: 600 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', fontFamily: 'monospace', fontWeight: 600 }}>
                   <span>Voice Playback Speed</span>
                   <span>{speed}x</span>
                 </div>
@@ -389,24 +390,24 @@ export default function Documents({ initialPrompt = '' }) {
                   step="0.25" 
                   value={speed} 
                   onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                  style={{ width: '100%', marginTop: '4px' }} 
+                  style={{ width: '100%', marginTop: '6px' }} 
                 />
               </div>
             </div>
           </div>
 
           {/* Upload / Edit Text */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700 }}>Document Content to Read</label>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Upload size={13} />
+              <label style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>Document Content to Read</label>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--neon-cyan)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Upload size={14} />
                 <span>Upload .docx</span>
                 <input type="file" accept=".docx" onChange={handleFileUpload} style={{ display: 'none' }} />
               </label>
             </div>
             <textarea 
-              rows="4" 
+              rows="5" 
               value={readText}
               onChange={(e) => setReadText(e.target.value)}
               placeholder="Paste or type text to read aloud..."
@@ -414,9 +415,9 @@ export default function Documents({ initialPrompt = '' }) {
           </div>
 
           {readerSummary && (
-            <div className="card" style={{ background: 'var(--brand-50)', borderColor: 'var(--brand-200)' }}>
-              <h4 style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--brand-900)', marginBottom: '4px' }}>AI Summary:</h4>
-              <p style={{ fontSize: '12px', color: 'var(--brand-900)', lineHeight: 1.4 }}>{readerSummary}</p>
+            <div className="card" style={{ background: 'rgba(0, 242, 254, 0.08)', borderColor: 'rgba(0, 242, 254, 0.3)' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: '6px', fontFamily: 'monospace' }}>AI Summary:</h4>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{readerSummary}</p>
             </div>
           )}
         </div>
