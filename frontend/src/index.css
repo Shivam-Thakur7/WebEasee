@@ -28,188 +28,7 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Light Frost Theme Mode — Gorgeous Pearl White Glass */
-[data-theme="light"] {
-  --bg-dark-base: #f1f5f9;
-  --bg-dark-surface: #ffffff;
-  --bg-dark-card: rgba(255, 255, 255, 0.85);
 
-  --border-glass: rgba(15, 23, 42, 0.12);
-  --border-glass-hover: rgba(15, 23, 42, 0.28);
-  --border-aurora: rgba(16, 185, 129, 0.4);
-
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-
-  --aurora-emerald: #059669;
-  --aurora-blue: #2563eb;
-  --aurora-purple: #7c3aed;
-  --aurora-rose: #db2777;
-}
-
-/* High Contrast Cyber Neon AAA Accessibility Mode Overhaul */
-.high-contrast {
-  --bg-dark-base: #000000 !important;
-  --bg-dark-surface: #000000 !important;
-  --bg-dark-card: #000000 !important;
-  --border-glass: #00ffff !important;
-  --border-glass-hover: #00ffff !important;
-  --border-aurora: #00ffff !important;
-  --text-primary: #ffffff !important;
-  --text-secondary: #ffff00 !important;
-  --text-muted: #00ffff !important;
-  --aurora-emerald: #00ffff !important;
-  --aurora-blue: #00ffff !important;
-  --aurora-purple: #ffff00 !important;
-  --aurora-rose: #ffff00 !important;
-  --aurora-cyan: #00ffff !important;
-  --shadow-aurora: 0 0 25px rgba(0, 255, 255, 0.4) !important;
-}
-
-/* Base high contrast dark surface overrides */
-html.high-contrast,
-body.high-contrast,
-.high-contrast .app-shell,
-.high-contrast #extension-container {
-  background: #000000 !important;
-  background-image: none !important;
-  color: #ffffff !important;
-}
-
-.high-contrast header,
-.high-contrast nav,
-.high-contrast .card,
-.high-contrast .view-section,
-.high-contrast .aurora-hero-stage,
-.high-contrast .aurora-glass-card,
-.high-contrast .aurora-command-bar,
-.high-contrast .ai-output-card {
-  background: #000000 !important;
-  border: 2px solid #00ffff !important;
-  box-shadow: 0 0 16px rgba(0, 255, 255, 0.35) !important;
-}
-
-/* Explicit text contrast rules */
-.high-contrast h1,
-.high-contrast h2,
-.high-contrast h3,
-.high-contrast h4,
-.high-contrast strong,
-.high-contrast .logo-title,
-.high-contrast p,
-.high-contrast label,
-.high-contrast td,
-.high-contrast th,
-.high-contrast input,
-.high-contrast textarea,
-.high-contrast select {
-  color: #ffffff !important;
-}
-
-.high-contrast .aurora-hero-sub,
-.high-contrast .text-muted,
-.high-contrast span {
-  color: #ffff00 !important;
-}
-
-.high-contrast svg {
-  stroke: #00ffff !important;
-}
-
-/* Navigation items in High Contrast */
-.high-contrast .nav-item {
-  border: 1px solid #00ffff !important;
-  color: #00ffff !important;
-}
-.high-contrast .nav-item svg {
-  stroke: #00ffff !important;
-}
-.high-contrast .nav-item.active {
-  background: #ffff00 !important;
-  color: #000000 !important;
-  border: 2px solid #ffff00 !important;
-  font-weight: 900 !important;
-  box-shadow: 0 0 18px rgba(255, 255, 0, 0.8) !important;
-}
-.high-contrast .nav-item.active * {
-  color: #000000 !important;
-  stroke: #000000 !important;
-}
-
-/* Tool Buttons in High Contrast */
-.high-contrast .tool-btn {
-  border: 2px solid #00ffff !important;
-  background: #000000 !important;
-  color: #00ffff !important;
-}
-.high-contrast .tool-btn svg {
-  stroke: #00ffff !important;
-}
-.high-contrast .tool-btn.active {
-  background: #00ffff !important;
-  color: #000000 !important;
-  border: 2px solid #00ffff !important;
-  box-shadow: 0 0 18px #00ffff !important;
-}
-.high-contrast .tool-btn.active svg {
-  stroke: #000000 !important;
-  color: #000000 !important;
-}
-.high-contrast .tool-btn-badge {
-  background: #ffff00 !important;
-  color: #000000 !important;
-  box-shadow: 0 0 10px #ffff00 !important;
-}
-
-/* Action Buttons & Inputs in High Contrast */
-.high-contrast .btn-primary,
-.high-contrast .aurora-submit-btn {
-  background: #00ffff !important;
-  color: #000000 !important;
-  border: 2px solid #00ffff !important;
-  font-weight: 900 !important;
-}
-.high-contrast .btn-primary svg,
-.high-contrast .aurora-submit-btn svg {
-  stroke: #000000 !important;
-}
-
-.high-contrast .btn-secondary,
-.high-contrast .dock-pill {
-  background: #000000 !important;
-  color: #ffff00 !important;
-  border: 2px solid #ffff00 !important;
-}
-.high-contrast .btn-secondary svg,
-.high-contrast .dock-pill svg {
-  stroke: #ffff00 !important;
-}
-
-.high-contrast .btn-secondary:hover,
-.high-contrast .dock-pill:hover {
-  background: #ffff00 !important;
-  color: #000000 !important;
-}
-.high-contrast .btn-secondary:hover svg,
-.high-contrast .dock-pill:hover svg {
-  stroke: #000000 !important;
-}
-
-/* High Contrast Switches in Settings */
-.high-contrast button[role="switch"] {
-  border: 2px solid #00ffff !important;
-  background: #000000 !important;
-}
-.high-contrast button[role="switch"][aria-checked="true"] {
-  background: #00ffff !important;
-}
-.high-contrast button[role="switch"] span {
-  background: #ffffff !important;
-}
-.high-contrast button[role="switch"][aria-checked="true"] span {
-  background: #000000 !important;
-}
 
 /* Large Text Typography Mode Overhaul (Proportional Accessibility Scale) */
 .large-text {
@@ -243,6 +62,42 @@ body.high-contrast,
 .large-text select { 
   font-size: 16px !important; 
   padding: 14px 18px !important; 
+}
+
+/* Documents UI Fixes */
+.tab-pill-btn {
+  background: var(--bg-dark-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-glass);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tab-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.tab-pill-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.prompt-pill {
+  background: var(--bg-dark-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-glass);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.prompt-pill:hover {
+  background: var(--bg-dark-card);
+  color: var(--text-primary);
+  border-color: var(--aurora-emerald);
 }
 
 .large-text .btn-primary { font-size: 15px !important; padding: 14px 26px !important; }
@@ -531,8 +386,41 @@ nav {
   to { opacity: 1; transform: translateY(0); }
 }
 
-
-
+/* Documents UI Fixes */
+.tab-pill-btn {
+  background: var(--bg-dark-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-glass);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tab-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.tab-pill-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.prompt-pill {
+  background: var(--bg-dark-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-glass);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.prompt-pill:hover {
+  background: var(--bg-dark-card);
+  color: var(--text-primary);
+  border-color: var(--aurora-emerald);
+}
 
 /* Concept 2: Iridescent Liquid Chrome 3D Sphere & Tech Grid Stage */
 .aurora-hero-stage {
@@ -1348,3 +1236,4 @@ textarea:focus, input[type="text"]:focus, select:focus {
     font-size: 10.5px;
   }
 }
+

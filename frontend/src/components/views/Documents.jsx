@@ -40,6 +40,40 @@ export default function Documents({ initialPrompt = '' }) {
     }
   }, [initialPrompt]);
 
+  // Listen for global tool commands
+  useEffect(() => {
+    const handleGenerate = (e) => {
+      const args = e.detail;
+      const text = args?.title || args?.content || prompt;
+      if (text) {
+        setPrompt(text);
+        setActiveTab('create');
+        setTimeout(() => {
+          const genBtn = document.getElementById('generate-doc-btn');
+          if (genBtn) genBtn.click();
+        }, 100);
+      }
+    };
+    const handleDownload = () => {
+      const btn = document.getElementById('download-doc-btn');
+      if (btn) btn.click();
+    };
+    const handleRead = () => {
+      const btn = document.getElementById('read-doc-btn');
+      if (btn) btn.click();
+    };
+
+    window.addEventListener('webease-tool-generate_document', handleGenerate);
+    window.addEventListener('webease-tool-download_document', handleDownload);
+    window.addEventListener('webease-tool-read_document', handleRead);
+
+    return () => {
+      window.removeEventListener('webease-tool-generate_document', handleGenerate);
+      window.removeEventListener('webease-tool-download_document', handleDownload);
+      window.removeEventListener('webease-tool-read_document', handleRead);
+    };
+  }, [prompt]);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setIsGenerating(true);
@@ -205,12 +239,12 @@ export default function Documents({ initialPrompt = '' }) {
 
   return (
     <section className="view-section">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>AI Document Studio</h2>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Generate, summarize & speak documents</p>
         </div>
-        <div className="tab-pills">
+        <div className="tab-pills" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button 
             className={`tab-pill-btn ${activeTab === 'create' ? 'active' : ''}`}
             onClick={() => setActiveTab('create')}

@@ -34,6 +34,89 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioPlayerRef = useRef(null);
+  const wakeWordRecognizerRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const silenceAnimRef = useRef(null);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(true);
+
+  // Wake Word Engine
+  useEffect(() => {
+    if (!wakeWordEnabled || isListening || isProcessing) {
+      if (wakeWordRecognizerRef.current) {
+        wakeWordRecognizerRef.current.stop();
+      }
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech Recognition API not supported in this browser.");
+      return;
+    }
+
+    const recognizer = new SpeechRecognition();
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
+    recognizer.lang = 'en-US';
+
+    recognizer.onresult = (event) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript.toLowerCase();
+        if (event.results[i].isFinal) {
+          if (transcript.includes('hello agent')) {
+            recognizer.stop();
+            startRecording();
+            return;
+          }
+        } else {
+          interimTranscript += transcript;
+          if (interimTranscript.includes('hello agent')) {
+            recognizer.stop();
+            startRecording();
+            return;
+          }
+        }
+      }
+    };
+
+    recognizer.onerror = (event) => {
+      if (event.error !== 'no-speech') {
+        console.error("Wake word recognizer error:", event.error);
+      }
+    };
+
+    recognizer.onend = () => {
+      // Chrome stops the recognizer after silence. We must restart it immediately.
+      if (wakeWordEnabled && !isListening && !isProcessing) {
+        try {
+          recognizer.start();
+        } catch (e) {}
+      }
+    };
+
+    try {
+      recognizer.start();
+      wakeWordRecognizerRef.current = recognizer;
+    } catch (e) {
+      // already started
+    }
+
+    // Backup watchdog just in case onend fails to fire
+    const watchdog = setInterval(() => {
+      if (wakeWordEnabled && !isListening && !isProcessing) {
+        try {
+          recognizer.start();
+        } catch (e) {}
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(watchdog);
+      recognizer.onend = null; // Prevent restart on unmount
+      if (wakeWordRecognizerRef.current) wakeWordRecognizerRef.current.stop();
+    };
+  }, [wakeWordEnabled, isListening, isProcessing]);
 
   // Listen for rerun commands triggered from History tab
   useEffect(() => {
@@ -110,9 +193,15 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
       const amount = args?.amount || 500;
       const direction = args?.direction === 'up' ? -amount : amount;
       window.scrollBy({ top: direction, behavior: 'smooth' });
-    } else if (tool === 'generate_document') {
-      const docPrompt = args?.title || args?.content || textInput || liveSpeech;
-      if (onCreateDoc) onCreateDoc(docPrompt);
+    } else if (['generate_document', 'download_document', 'read_document', 'delete_history_item'].includes(tool)) {
+      if (tool === 'generate_document') {
+        const docPrompt = args?.title || args?.content || textInput || liveSpeech;
+        if (onCreateDoc) onCreateDoc(docPrompt);
+      }
+      
+      // Dispatch event for the active view to handle
+      window.dispatchEvent(new CustomEvent(`webease-tool-${tool}`, { detail: args || {} }));
+      return;
     }
   };
 
@@ -237,6 +326,47 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
       setIsProcessing(false);
       setLiveSpeech("");
       setStatusMessage("Listening... Speak your command clearly.");
+
+      // Voice Activity Detection (Auto-stop on silence)
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 512;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      let silenceStart = Date.now();
+      let hasSpoken = false;
+
+      const checkSilence = () => {
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        const sum = dataArray.reduce((a, b) => a + b, 0);
+        const average = sum / bufferLength;
+        
+        if (average > 10) { // Threshold for speech
+          hasSpoken = true;
+          silenceStart = Date.now();
+        } else {
+          // If they spoke, and now it's been silent for 1.5 seconds, stop recording
+          if (hasSpoken && Date.now() - silenceStart > 1500) {
+            stopRecording();
+            return;
+          }
+          // Or if they didn't speak for 5 seconds, timeout
+          if (!hasSpoken && Date.now() - silenceStart > 5000) {
+            stopRecording();
+            return;
+          }
+        }
+        silenceAnimRef.current = requestAnimationFrame(checkSilence);
+      };
+      
+      checkSilence();
+
     } catch (err) {
       console.error("Microphone error:", err);
       setMicError(true);
@@ -247,6 +377,14 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    if (silenceAnimRef.current) {
+      cancelAnimationFrame(silenceAnimRef.current);
+      silenceAnimRef.current = null;
     }
     setIsListening(false);
   };
@@ -263,6 +401,20 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
     }
   };
 
+  // Sync mic state to the global floating mic in App.jsx
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('webease-mic-state', {
+      detail: { isListening, isProcessing, statusMessage, micError, liveSpeech }
+    }));
+  }, [isListening, isProcessing, statusMessage, micError, liveSpeech]);
+
+  // Listen for global mic toggle events
+  useEffect(() => {
+    const handleToggle = () => handleMicClick();
+    window.addEventListener('webease-toggle-mic', handleToggle);
+    return () => window.removeEventListener('webease-toggle-mic', handleToggle);
+  }, [isListening]); // React to isListening so handleMicClick has the right closure
+
   return (
     <section className="view-section">
       {/* Concept 4: Frosted Glass Aurora Hero Stage */}
@@ -277,7 +429,7 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
           title={isListening ? "Stop listening" : "Click to speak"}
         >
           <Strands
-            colors={["#a1ff12","#7C3AED","#06B6D4"]}
+            colors={isListening ? ["#ef4444", "#fb923c", "#f43f5e"] : ["#a1ff12","#7C3AED","#06B6D4"]}
             count={3}
             speed={0.5}
             amplitude={1}
@@ -349,24 +501,66 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
         )}
       </div>
 
-      {/* Floating Glass Cards Grid */}
-      <div className="aurora-cards-grid">
+      {/* Transcript and Response Container */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '700px', margin: '0 auto', zIndex: 10, position: 'relative' }}>
+        {/* Live Transcript */}
         <div className="aurora-glass-card">
-          <span>LIVE TRANSCRIPT</span>
-          <strong>{liveSpeech || (isListening ? 'Listening...' : 'Say "Hey WebEase"')}</strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              Live Transcript
+            </span>
+            <strong>{liveSpeech || (isListening ? 'Listening...' : 'Say "Hello Agent"')}</strong>
+          </div>
         </div>
 
-        <div className="aurora-glass-card">
-          <span>PARSED INTENT</span>
-          <strong>{lastResult?.tool ? `Intent: ${lastResult.tool}` : 'Ready for intent recognition'}</strong>
-        </div>
+        {/* Last Result & AI Response Card */}
+        {lastResult && (
+          <div className="ai-output-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={16} color="var(--aurora-emerald)" />
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>Last Action Executed</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="tool-badge">
+                  {lastResult.tool || 'Clarification'}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {lastResult.timestamp}
+                </span>
+              </div>
+            </div>
 
-        <div className="aurora-glass-card">
-          <span>AI STATUS</span>
-          <strong style={{ color: backendHealthy ? 'var(--aurora-emerald)' : '#fca5a5' }}>
-            {backendHealthy ? 'Azure AI Online (Ultra-Low Latency)' : 'Backend Offline'}
-          </strong>
-        </div>
+            <div style={{ fontSize: '14px', color: '#ffffff', lineHeight: 1.4, marginTop: '12px' }}>
+              <strong>Recognized:</strong> "{lastResult.command}"
+            </div>
+
+            {lastResult.responseText && (
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.05)', 
+                padding: '12px 16px', 
+                borderRadius: '16px', 
+                border: '1px solid var(--border-glass)',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                gap: '8px',
+                marginTop: '12px'
+              }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                  💬 "{lastResult.responseText}"
+                </div>
+                <button 
+                  className="tool-btn" 
+                  title="Replay Voice"
+                  onClick={() => playTTS(lastResult.responseText)}
+                >
+                  <Volume2 size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Floating Bottom Action Dock */}
@@ -388,53 +582,6 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
         </button>
       </div>
 
-      {/* Last Result & AI Response Card */}
-      {lastResult && (
-        <div className="ai-output-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle2 size={16} color="var(--aurora-emerald)" />
-              <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>Last Action Executed</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="tool-badge">
-                {lastResult.tool || 'Clarification'}
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                {lastResult.timestamp}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ fontSize: '14px', color: '#ffffff', lineHeight: 1.4 }}>
-            <strong>Recognized:</strong> "{lastResult.command}"
-          </div>
-
-          {lastResult.responseText && (
-            <div style={{ 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              padding: '12px 16px', 
-              borderRadius: '16px', 
-              border: '1px solid var(--border-glass)',
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              gap: '8px'
-            }}>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                💬 "{lastResult.responseText}"
-              </div>
-              <button 
-                className="tool-btn" 
-                title="Replay Voice"
-                onClick={() => playTTS(lastResult.responseText)}
-              >
-                <Volume2 size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }

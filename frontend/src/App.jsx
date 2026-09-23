@@ -19,6 +19,85 @@ import Documents from './components/views/Documents';
 import History from './components/views/History';
 import Settings from './components/views/Settings';
 
+function FloatingMic({ visible }) {
+  const [micState, setMicState] = useState({
+    isListening: false,
+    isProcessing: false,
+    statusMessage: '',
+    micError: false,
+    liveSpeech: ''
+  });
+
+  useEffect(() => {
+    const handleStateUpdate = (e) => setMicState(e.detail);
+    window.addEventListener('webease-mic-state', handleStateUpdate);
+    return () => window.removeEventListener('webease-mic-state', handleStateUpdate);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'absolute',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: '8px'
+      }}
+    >
+      {micState.statusMessage && (
+        <div style={{
+          background: 'rgba(0,0,0,0.75)',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: '12px',
+          fontSize: '11px',
+          maxWidth: '200px',
+          textAlign: 'right',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {micState.statusMessage}
+        </div>
+      )}
+      
+      <div style={{ position: 'relative' }}>
+        {micState.isListening && (
+          <>
+            <div className="pulse-ring pulse-ring-1"></div>
+            <div className="pulse-ring pulse-ring-2"></div>
+          </>
+        )}
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('webease-toggle-mic'))}
+          className={`main-mic-btn ${micState.isListening ? 'listening' : ''} ${micState.micError ? 'error' : ''}`}
+          style={{ 
+            width: '56px', height: '56px', 
+            borderRadius: '50%',
+            boxShadow: micState.isListening ? '0 4px 20px rgba(239, 68, 68, 0.4)' : '0 4px 15px rgba(0,0,0,0.3)',
+            backgroundColor: micState.isListening ? '#ef4444' : 'var(--bg-dark-card)',
+            color: micState.isListening ? '#ffffff' : 'var(--text-primary)',
+            border: micState.isListening ? 'none' : '1px solid var(--border-glass)',
+            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease'
+          }}
+          title="Toggle Global Microphone"
+        >
+          <Mic size={24} strokeWidth={2.5} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [largeText, setLargeText] = useState(false);
@@ -132,27 +211,7 @@ export default function App() {
               <Mic size={15} />
             </button>
 
-            {/* Dark Aura / Light Frost Theme Switcher */}
-            <button 
-              className={`tool-btn ${theme === 'light' ? 'active' : ''}`}
-              aria-label="Toggle Light / Dark Glass Theme" 
-              title={`Switch to ${theme === 'light' ? 'Dark Aura' : 'Light Frost'} Glass Theme`}
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            >
-              {theme === 'light' ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
 
-            {/* High Contrast AAA Toggle */}
-            <button 
-              id="toggle-contrast" 
-              className={`tool-btn ${highContrast ? 'active' : ''}`}
-              aria-label="Toggle High Contrast AAA Accessibility Mode" 
-              title={highContrast ? "High Contrast: ON" : "High Contrast: OFF"}
-              onClick={() => setHighContrast(!highContrast)}
-            >
-              <Contrast size={15} />
-              {highContrast && <span className="tool-btn-badge">HC</span>}
-            </button>
 
             {/* Large Text Mode Toggle */}
             <button 
@@ -204,14 +263,14 @@ export default function App() {
         </nav>
 
         {/* Main Body Content */}
-        <div className="views-body">
-          {currentView === 'dashboard' && (
+        <div className="views-body" style={{ position: 'relative', paddingBottom: currentView !== 'dashboard' ? '80px' : '16px' }}>
+          <div style={{ display: currentView === 'dashboard' ? 'block' : 'none' }}>
             <Dashboard 
               onNavigate={setCurrentView} 
               onCreateDoc={handleCreateDoc}
               backendHealthy={backendHealthy}
             />
-          )}
+          </div>
           {currentView === 'documents' && (
             <Documents initialPrompt={docInitialPrompt} />
           )}
@@ -234,6 +293,8 @@ export default function App() {
               setTheme={setTheme}
             />
           )}
+
+          <FloatingMic visible={currentView !== 'dashboard' && currentView !== 'history'} />
         </div>
       </div>
     </div>

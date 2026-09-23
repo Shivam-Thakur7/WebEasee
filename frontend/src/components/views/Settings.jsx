@@ -107,22 +107,6 @@ export default function Settings({
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-          {/* Dark Mode */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-glass)', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {theme === 'dark' ? <Moon size={16} color="var(--aurora-cyan)" /> : <Sun size={16} color="var(--aurora-rose)" />}
-              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Dark Cockpit Theme</span>
-            </div>
-            <button 
-              role="switch" 
-              aria-checked={theme === 'dark'} 
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              style={{ width: '42px', height: '24px', background: theme === 'dark' ? 'var(--aurora-emerald)' : 'rgba(15, 23, 42, 0.2)', borderRadius: '9999px', border: '1px solid var(--border-glass)', position: 'relative', cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              <span style={{ display: 'block', width: '18px', height: '18px', background: theme === 'dark' ? '#0b0e14' : '#ffffff', borderRadius: '50%', transform: theme === 'dark' ? 'translateX(20px)' : 'translateX(2px)', transition: 'transform 0.2s' }}></span>
-            </button>
-          </div>
-
           {/* Large Text */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-glass)', borderRadius: '12px' }}>
             <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Large Text Mode (115%)</span>
@@ -133,19 +117,6 @@ export default function Settings({
               style={{ width: '42px', height: '24px', background: largeText ? 'var(--aurora-emerald)' : 'rgba(15, 23, 42, 0.2)', borderRadius: '9999px', border: '1px solid var(--border-glass)', position: 'relative', cursor: 'pointer', transition: 'all 0.2s' }}
             >
               <span style={{ display: 'block', width: '18px', height: '18px', background: largeText ? '#0b0e14' : '#ffffff', borderRadius: '50%', transform: largeText ? 'translateX(20px)' : 'translateX(2px)', transition: 'transform 0.2s' }}></span>
-            </button>
-          </div>
-          
-          {/* High Contrast AAA */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-glass)', borderRadius: '12px' }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>High Contrast Mode (AAA)</span>
-            <button 
-              role="switch" 
-              aria-checked={highContrast} 
-              onClick={() => setHighContrast(!highContrast)}
-              style={{ width: '42px', height: '24px', background: highContrast ? 'var(--aurora-emerald)' : 'rgba(15, 23, 42, 0.2)', borderRadius: '9999px', border: '1px solid var(--border-glass)', position: 'relative', cursor: 'pointer', transition: 'all 0.2s' }}
-            >
-              <span style={{ display: 'block', width: '18px', height: '18px', background: highContrast ? '#0b0e14' : '#ffffff', borderRadius: '50%', transform: highContrast ? 'translateX(20px)' : 'translateX(2px)', transition: 'transform 0.2s' }}></span>
             </button>
           </div>
         </div>
