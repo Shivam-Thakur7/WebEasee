@@ -160,15 +160,60 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
   };
 
   // Perform browser action on website (or pass to extension if available)
-  const performAction = (tool, args, responseText) => {
-    // 1. If in Chrome Extension environment, message content script
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+  const performAction = (tool, args, responseText, commandText = "") => {
+    
+    const dashboardOnlyTools = ['generate_document', 'download_document', 'read_document', 'delete_history_item'];
+
+    // 1. If in Chrome Extension environment and tool belongs to extension, message content script
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage && !dashboardOnlyTools.includes(tool)) {
       try {
         chrome.runtime.sendMessage({
           type: 'EXECUTE_IN_TAB',
           tool: tool,
           args: args || {}
+        }, async (response) => {
+          if (tool === 'summarize_page' && response && response.success && response.result) {
+            try {
+              // Extract the actual text from the nested result object
+              const pageText = typeof response.result === 'object' ? response.result.result : response.result;
+              if (!pageText) throw new Error("No text returned from page");
+
+              setStatusMessage("Generating page summary...");
+              const res = await fetch(`${BACKEND_URL}/commands/summarize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ page_text: pageText })
+              });
+              const data = await res.json();
+              if (data.status === 'success') {
+                setLastResult(prev => ({ ...prev, responseText: data.summary }));
+                playTTS(data.summary);
+                setStatusMessage("Summary generated. Creating document...");
+                
+                // Directly generate document using the backend without polluting the top prompt area
+                fetch(`${BACKEND_URL}/documents/generate`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prompt: `Webpage Summary:\n\n${data.summary}`, read_aloud: false })
+                }).then(res => res.json()).then(docData => {
+                  if (docData.status !== 'error') {
+                    if (onCreateDoc) onCreateDoc(""); // Switch view
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('webease-tool-document_ready', { detail: docData }));
+                    }, 200);
+                  }
+                  setStatusMessage("Document ready.");
+                }).catch(err => {
+                  console.error("Doc generation error:", err);
+                  setStatusMessage("Summary generated, but doc failed.");
+                });
+              }
+            } catch (err) {
+              console.error("Summarize error:", err);
+            }
+          }
         });
+        return; // Prevents executing the local browser fallback below!
       } catch (err) {
         console.log("Extension message error:", err);
       }
@@ -195,13 +240,58 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
       window.scrollBy({ top: direction, behavior: 'smooth' });
     } else if (['generate_document', 'download_document', 'read_document', 'delete_history_item'].includes(tool)) {
       if (tool === 'generate_document') {
-        const docPrompt = args?.title || args?.content || textInput || liveSpeech;
+        const docPrompt = commandText || textInput || liveSpeech || args?.title || args?.content;
         if (onCreateDoc) onCreateDoc(docPrompt);
       }
       
       // Dispatch event for the active view to handle
       window.dispatchEvent(new CustomEvent(`webease-tool-${tool}`, { detail: args || {} }));
       return;
+    } else if (tool === 'summarize_page') {
+      try {
+        setStatusMessage("Generating page summary locally...");
+        const pageText = document.body?.innerText?.slice(0, 3000) || "";
+        
+        // Smart fallback: Prevent summarizing the dashboard itself if tested locally
+        if (document.title.includes("WebEase") || pageText.includes("LIVE TRANSCRIPT")) {
+           const fallbackMsg = "You are currently viewing the WebEase dashboard! To summarize an external website like Wikipedia, please run WebEase as a Chrome extension and open its side panel on the page you want to summarize.";
+           setLastResult(prev => ({ ...prev, responseText: fallbackMsg }));
+           playTTS(fallbackMsg);
+           setStatusMessage("Extension mode required for external sites.");
+           return;
+        }
+
+        fetch(`${BACKEND_URL}/commands/summarize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page_text: pageText })
+        }).then(res => res.json()).then(data => {
+          if (data.status === 'success') {
+            setLastResult(prev => ({ ...prev, responseText: data.summary }));
+            playTTS(data.summary);
+            setStatusMessage("Summary generated. Creating document...");
+            
+            fetch(`${BACKEND_URL}/documents/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: `Webpage Summary:\n\n${data.summary}`, read_aloud: false })
+            }).then(res => res.json()).then(docData => {
+              if (docData.status !== 'error') {
+                if (onCreateDoc) onCreateDoc(""); 
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('webease-tool-document_ready', { detail: docData }));
+                }, 200);
+              }
+              setStatusMessage("Document ready.");
+            }).catch(err => {
+              console.error("Doc generation error:", err);
+              setStatusMessage("Summary generated, but doc failed.");
+            });
+          }
+        });
+      } catch (err) {
+        console.error("Local summarize error:", err);
+      }
     }
   };
 
@@ -232,7 +322,7 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
       });
 
       setStatusMessage("Command executed successfully.");
-      performAction(data.tool, data.args, data.response_text);
+      performAction(data.tool, data.args, data.response_text, commandText);
 
       if (data.response_text) {
         await playTTS(data.response_text);
@@ -285,7 +375,7 @@ export default function Dashboard({ onNavigate, onCreateDoc, backendHealthy = fa
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
 
-      performAction(data.tool, data.args, data.response_text);
+      performAction(data.tool, data.args, data.response_text, transcribed);
 
       if (data.response_text) {
         await playTTS(data.response_text);

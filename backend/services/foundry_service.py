@@ -65,7 +65,8 @@ When the user speaks a command, choose the MOST APPROPRIATE tool from the list b
 - "find the subscribe button", "highlight the search box" → `find_element` with description.
 
 ### Documents
-- "create a document about X", "write a document on Y" → `generate_document`
+- "create a document about X", "write a document on Y", "generate a 500 word essay on chocolate cake" → `generate_document`.
+  IMPORTANT: You MUST generate the FULL, detailed, expansive text of the document exactly as requested in the 'content' parameter. Do NOT just put a short summary or the title in the 'content' field. If the user asks for a 500-word essay, write a 500-word essay.
 - "download it", "download the document" → `download_document`
 - "read it", "read the document aloud" → `read_document`
 - "summarise the document" (referring to a WebEase doc, not a webpage) → `summarize_document`

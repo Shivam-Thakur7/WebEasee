@@ -40,39 +40,7 @@ export default function Documents({ initialPrompt = '' }) {
     }
   }, [initialPrompt]);
 
-  // Listen for global tool commands
-  useEffect(() => {
-    const handleGenerate = (e) => {
-      const args = e.detail;
-      const text = args?.title || args?.content || prompt;
-      if (text) {
-        setPrompt(text);
-        setActiveTab('create');
-        setTimeout(() => {
-          const genBtn = document.getElementById('generate-doc-btn');
-          if (genBtn) genBtn.click();
-        }, 100);
-      }
-    };
-    const handleDownload = () => {
-      const btn = document.getElementById('download-doc-btn');
-      if (btn) btn.click();
-    };
-    const handleRead = () => {
-      const btn = document.getElementById('read-doc-btn');
-      if (btn) btn.click();
-    };
 
-    window.addEventListener('webease-tool-generate_document', handleGenerate);
-    window.addEventListener('webease-tool-download_document', handleDownload);
-    window.addEventListener('webease-tool-read_document', handleRead);
-
-    return () => {
-      window.removeEventListener('webease-tool-generate_document', handleGenerate);
-      window.removeEventListener('webease-tool-download_document', handleDownload);
-      window.removeEventListener('webease-tool-read_document', handleRead);
-    };
-  }, [prompt]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -175,7 +143,9 @@ export default function Documents({ initialPrompt = '' }) {
   useEffect(() => {
     const handleVoiceGenerate = (e) => {
       const args = e.detail || {};
-      const docPrompt = args.title || args.content || prompt;
+      // If prompt was already updated via App.jsx's handleCreateDoc, we don't want to overwrite it with the lossy args.title
+      // unless prompt is empty.
+      const docPrompt = prompt || args.content || args.title;
       if (docPrompt && docPrompt !== prompt) {
         setPrompt(docPrompt);
       }
@@ -196,14 +166,27 @@ export default function Documents({ initialPrompt = '' }) {
       if (readBtn) readBtn.click();
     };
 
+    const handleDocumentReady = (e) => {
+      const docData = e.detail;
+      setGeneratedDoc({
+        title: docData.title || "AI_Overview.docx",
+        filename: docData.filename || "webease_doc.docx",
+        content: docData.content_preview || docData.content || "",
+        downloadUrl: docData.download_url ? `${BACKEND_URL}${docData.download_url}` : null
+      });
+      setActiveTab('create');
+    };
+
     window.addEventListener('webease-tool-generate_document', handleVoiceGenerate);
     window.addEventListener('webease-tool-download_document', handleVoiceDownload);
     window.addEventListener('webease-tool-read_document', handleVoiceRead);
+    window.addEventListener('webease-tool-document_ready', handleDocumentReady);
     
     return () => {
       window.removeEventListener('webease-tool-generate_document', handleVoiceGenerate);
       window.removeEventListener('webease-tool-download_document', handleVoiceDownload);
       window.removeEventListener('webease-tool-read_document', handleVoiceRead);
+      window.removeEventListener('webease-tool-document_ready', handleDocumentReady);
     };
   }, [prompt]);
 
